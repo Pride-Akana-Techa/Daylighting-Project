@@ -1,9 +1,3 @@
-# Load packages
-library(shiny)
-library(ggplot2)
-library(plotly)
-
-# Define UI for application
 library(shiny)
 library(ggplot2)
 library(plotly)
@@ -73,7 +67,7 @@ ui <- navbarPage(
           h5("Research Questions"),
           
           tags$ul(
-            tags$li("Have pedestrian and bicycle crashes changed since AB 413 was implemented?"),
+            tags$li("Have pedestrian and bicycle safety changed since AB 413 was implemented?"),
             tags$li("Do impacts vary across counties and regions?"),
             tags$li("Are impacts distributed equitably across demographic groups?"),
             tags$li("Does enforcement intensity influence outcomes?")
@@ -88,19 +82,19 @@ ui <- navbarPage(
         selectInput(
           inputId = "victim_type",
           label = "Victim Filters",
-          choices = c("Incidents", "Injuries", "Deaths")
+          choices = c("All Incidents", "Injuries", "Deaths")
         ),
         
         checkboxGroupInput(
           inputId = "mode",
           label = "Road User Type",
-          choices = c("All Accidents", "Pedestrian", "Bicycle")
+          choices = c("All Accidents", "Pedestrian", "Bicyclist")
         ),
         
         selectInput(
           inputId = "location_type",
           label = "Location Filters",
-          choices = c("All", "Intersections")
+          choices = c("All", "Intersection", "Non-Intersection")
         ),
         
         sliderInput(
@@ -147,13 +141,12 @@ ui <- navbarPage(
   tabPanel("About Us")
 )
 
-server <- function(input, output) {}
 
-shinyApp(ui = ui, server = server)
-# Define server logic required 
 server <- function(input, output) {
+  
+  
+
   
 }
 
-# Run the application 
 shinyApp(ui = ui, server = server)
