@@ -1,17 +1,15 @@
 # load packages
 library(tidyverse)
-library(lubridate)
+
+# Importing and Cleaning ----------------------------------------------------
 
 # Merge the datasets
-folder_path <- "C:/Users/techap/Desktop/Cal-Walks-1/raw-data"
-combined_crashes <- list.files(path = folder_path, pattern = "\\csv$", 
-                               full.names = TRUE) |> 
-  map_df(~read_csv(.x, col_types = cols(.default = "c"))) |> 
-  
-  write_csv(file.path("data/Crashes_California"))
+yearly_crashes <- read_csv("initial-analysis/scripts/CCRS-statewide-crashes.csv")
+
+problems(yearly_crashes)
 
 # converts the crash time to standard date-time object
-updated_crashes <- combined_crashes |> 
+updated_crashes <- yearly_crashes |> 
   mutate(Modified_time = parse_date_time(`Crash Date Time`, 
                                          orders = c("mdy HM", "mdy HMS"))) |> 
 
@@ -19,12 +17,18 @@ updated_crashes <- combined_crashes |>
   mutate(Month = month(Modified_time, label = TRUE, abbr = FALSE),
          Year = year(Modified_time)) |> 
  
+  filter_out(Year == "2026") |> 
   
   # Remove columns with at least 70% null values 
-  select(-c(IsAOIOneSameAsLocation, IsLocationReferToNarrative, HasDigitalMediaFiles, IsAdditonalObjectStruck, IsCountyRoad, ReportingDistrictCode, PedestrianActionDesc, LightingDescription, MotorVehicleInvolvedWithDesc, MotorVehicleInvolvedWithOtherDesc, MilepostDistance, MilepostMarker, MilepostUnitOfMeasure, `Weather 2`, `Road Condition 2`, MilepostDirection, ReportingDistrict, EvidenceNumber, NotificationTimeDescription, IsAttachmentsMailed, `Collision Type Other Desc`, HitRun, `Special Condition`, SketchDesc, IsFreeway))
+  select(-c(IsAOIOneSameAsLocation, IsLocationReferToNarrative, HasDigitalMediaFiles, IsAdditonalObjectStruck, IsCountyRoad, ReportingDistrictCode, PedestrianActionDesc, NotificationDate, MotorVehicleInvolvedWithDesc, MotorVehicleInvolvedWithOtherDesc, MilepostDistance, MilepostMarker, MilepostUnitOfMeasure, `Weather 2`, `Road Condition 2`, MilepostDirection, ReportingDistrict, EvidenceNumber, NotificationTimeDescription, IsAttachmentsMailed, `Collision Type Other Desc`, HitRun, `Special Condition`, SketchDesc, IsFreeway)) |> 
+  
+  write_csv(file.path("initial-analysis/scripts/updated-crashes.csv"))
 
 # Check for null values in each variable
 colSums(is.na(updated_crashes)) 
+
+
+# Time Series: Pedestrian and Bicycle Crashes -----------------------------
 
 # Grouping for pedestrian and bicyclist crashes
 updated_crashes |>  
@@ -92,4 +96,55 @@ updated_crashes |>
   ggsave("figs/yearly-ped-int-injuries.png",
          width = 10,
          height = 6)
+
+
+# Analysis by Time of the Day ---------------------------------------------
+
+  
+# filtering for pedestrian crashes by time of the day and plotting (2016-2025)
+# 1. Yearly
+    
+  updated_crashes |> 
+    filter(PedestrianActionCode == "B") |> 
+    mutate(LightingDescription = case_when(
+      LightingDescription == "DAYLIGHT" ~ "Daylight",                     
+      LightingDescription %in% c("DARK-STREET LIGHTS NOT FUNCTIONING",
+                                 "DARK-STREET LIGHTS",
+                                 "DARK-NO STREET LIGHTS") ~ "Dark",
+      LightingDescription =="DUSK-DAWN" ~"Dusk-Dawn"
+    )) |> 
+    filter_out(is.na(LightingDescription))|> 
+    group_by(Year, LightingDescription) |> 
+    summarize(Pedestrian_int_crashes = n(),
+              .groups = "drop") |> 
+    ggplot(aes(x = Pedestrian_int_crashes, y = LightingDescription, fill = LightingDescription)) +
+    geom_col() +
+    theme(axis.text.y = element_text(angle = 45, vjust = 1, hjust=1)) +
+    facet_wrap(~Year) +
+    labs(title = "Pedestrian Crashes by Periods of the Day",
+         x = "Number of Crashes",
+         y = "Lighting Description")
+  
+# 2.Monthly  
+  updated_crashes |> 
+    filter(PedestrianActionCode == "B") |> 
+    mutate(LightingDescription = case_when(
+      LightingDescription == "DAYLIGHT" ~ "Daylight",                     
+      LightingDescription %in% c("DARK-STREET LIGHTS NOT FUNCTIONING",
+                                 "DARK-STREET LIGHTS",
+                                 "DARK-NO STREET LIGHTS") ~ "Dark",
+      LightingDescription =="DUSK-DAWN" ~"Dusk-Dawn"
+    )) |> 
+    filter_out(is.na(LightingDescription))|> 
+    group_by(Month, LightingDescription) |> 
+    summarize(Pedestrian_int_crashes = n(),
+              .groups = "drop") |> 
+    ggplot(aes(x = Pedestrian_int_crashes, y = LightingDescription, fill = LightingDescription)) +
+    geom_col() +
+    theme(axis.text.y = element_text(angle = 45, vjust = 1, hjust=1)) +
+    facet_wrap(~Month) +
+    labs(title = "Pedestrian Crashes by Periods of the Day",
+         x = "Number of Crashes",
+         y = "Lighting Description")
+  
   
