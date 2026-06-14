@@ -125,9 +125,15 @@ updated_crashes |>
          x = "Number of Crashes",
          y = "Lighting Description")
   
-# 2.Monthly  
+# 2.Monthly 
+  updated_crashes <- read_csv("initial-analysis/scripts/updated-crashes.csv")
+  
   updated_crashes |> 
     filter(PedestrianActionCode == "B") |> 
+    mutate(Month = factor(Month,
+                           levels = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+                           )
+           ) |> 
     mutate(LightingDescription = case_when(
       LightingDescription == "DAYLIGHT" ~ "Daylight",                     
       LightingDescription %in% c("DARK-STREET LIGHTS NOT FUNCTIONING",
@@ -147,4 +153,42 @@ updated_crashes |>
          x = "Number of Crashes",
          y = "Lighting Description")
   
+  ggsave("initial-analysis/figs/monthly-ped-crashes-daytime.png",
+         width = 10,
+         height = 6)
+  
+  
+
+# Analysis by Weather -----------------------------------------------------
+  # Yearly
+  updated_crashes <- read_csv("initial-analysis/scripts/updated-crashes.csv")
+  updated_crashes |> 
+    filter(PedestrianActionCode == "B") |>
+    filter_out(is.na(`Weather 1`)) |> 
+    group_by(Year, `Weather 1`) |> 
+    summarize(Ped_int_crashes = n(),
+               .groups = "drop") |> 
+    ggplot(aes(x = Year, y = Ped_int_crashes, fill = `Weather 1`)) +
+    geom_col() +
+    scale_x_continuous(breaks = seq(2016, 2025, by = 1))
+    
+  # Monthly
+  updated_crashes |> 
+    filter(PedestrianActionCode == "B") |> 
+    filter(Year == 2025) |> 
+    filter_out(is.na(`Weather 1`)) |> 
+    mutate(Weather = case_when(
+      `Weather 1` == "CLEAR" ~ "Clear",
+      `Weather 1` == "CLOUDY" ~ "Cloudy",
+      `Weather 1` == "RAINING" ~ "Raining",
+      `Weather 1`%in% c("WIND", "UNKNOWN", "SNOWING", "SMOKY", "SMOKEY", 
+                        "OTHER", "FOG/VISIBILITY") ~ "Other"
+        )
+      ) |> 
+    group_by(Month, Weather) |> 
+    summarize(Ped_crashes = n(),
+              .groups = "drop") |> 
+    ggplot(aes(x = Ped_crashes, y = Weather, fill = Weather)) +
+    geom_col()
+  class(updated_crashes$Year)
   

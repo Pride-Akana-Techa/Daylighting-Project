@@ -3,3 +3,5 @@
 .RData
 .Ruserdata
 .positai
+initial-analysis/scripts/CCRS-statewide-crashes.csv
+initial-analysis/scripts/updated-crashes.csv
