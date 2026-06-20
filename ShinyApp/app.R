@@ -7,6 +7,7 @@ library(shiny)
 library(plotly)
 library(tidyverse)
 library(bslib)
+library(leaflet)
 
 # Theme Setup using the bslib package
 app_theme <- bs_theme(
