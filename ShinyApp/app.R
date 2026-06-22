@@ -10,6 +10,7 @@ library(leaflet)
 library(sf)
 library(scales)
 library(here)
+library(htmlwidgets)
 
 # Theme Setup using the bslib package
 app_theme <- bs_theme(
