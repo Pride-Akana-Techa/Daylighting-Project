@@ -1,5 +1,7 @@
-
 # Packages and Data Setup -------------------------------------------------
+
+# add monthly totals to graph
+# add warning if dates are giving incomplete year range for yearly totals graph
 
 
 # load packages
@@ -7,6 +9,14 @@ library(shiny)
 library(plotly)
 library(tidyverse)
 library(bslib)
+library(tidycensus)
+library(leaflet)
+library(sf)
+library(scales)
+library(here)
+library(htmlwidgets)
+library(leafgl)
+library(leaflet.extras)
 library(leaflet)
 
 # Theme Setup using the bslib package
@@ -19,6 +29,32 @@ app_theme <- bs_theme(
   heading_font = font_google("DM Sans")
 )
 
+# Load data
+
+# OSM Pedestrian Crossings
+crossings_cal <- readRDS(here("initial-analysis", "data-raw", "OSM_california_crossings.rds"))
+
+# California state boundary
+ca_boundary <- readRDS(here("initial-analysis", "data-clean", "ca_boundary.rds"))
+
+# Bike or ped crash data 
+bike_or_ped_acc_all <- readRDS(here("initial-analysis", "data-raw", "TIMS_bike_ped_all.rds"))
+
+
+# Bike or ped geolocated crash data only
+bike_or_ped_acc_sf <- readRDS(here("initial-analysis", "data-raw", "TIMS_bike_ped_geo.rds"))
+
+# Data preparation: ensure COLLISION_DATE is in Date format for both datasets
+bike_or_ped_acc_all <- bike_or_ped_acc_all %>%
+  mutate(
+    COLLISION_DATE = as.Date(COLLISION_DATE)
+  )
+
+bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
+  mutate(
+    COLLISION_DATE = as.Date(COLLISION_DATE)
+  )
+
 
 # Shiny App ---------------------------------------------------------------
 
@@ -28,7 +64,7 @@ ui <- page_navbar(
     style = "margin-right: 25px;",
     "California Assembly Bill 413: Daylighting Law",
     div(
-      "Investigating the Impacts of Daylighting on Pedestrian and Bicyclist  Safety",
+      "Investigating the Impacts of Daylighting on Pedestrian and Bicyclist Safety",
       style = "font-size: 13px;"
     ),
     tags$img(
@@ -78,6 +114,7 @@ ui <- page_navbar(
           height = "50%"
         )
       ),
+      
       # Right Column
       div(
         p(tags$strong("Enforcement timeline:")),
@@ -104,8 +141,8 @@ ui <- page_navbar(
           )
         ), 
         
-        ## Interactive Graph
-        p(tags$strong("Interactive Graph")),
+        ## Interactive Filters
+        p(tags$strong("Filters")),
         
         layout_columns(
           col_widths = c(3, 3, 3, 3),
@@ -114,19 +151,22 @@ ui <- page_navbar(
           selectInput(
             inputId = "victim_type",
             label = "Victim Filters",
-            choices = c("All Incidents", "Injuries", "Deaths")
+            choices = c("All Incidents", "Injuries", "Fatalities"),
+            selected = "All Incidents"
           ),
           
           checkboxGroupInput(
             inputId = "mode",
             label = "Road User Type",
-            choices = c("All Accidents", "Pedestrian", "Bicyclist")
+            choices = c("Pedestrian", "Bicyclist"),
+            selected = c("Pedestrian", "Bicyclist")
           ),
           
           selectInput(
             inputId = "location_type",
             label = "Location Filters",
-            choices = c("All", "Intersection", "Non-Intersection")
+            choices = c("All", "Intersection", "Non-Intersection"),
+            selected = "All"
           ),
           
           sliderInput(
@@ -141,8 +181,18 @@ ui <- page_navbar(
           )
         ),
         
-        # Plot below
-        plotlyOutput(outputId = "main_plot")
+        # Visualization panels
+        navset_card_tab(
+          nav_panel(
+            "Graph",
+            plotlyOutput(outputId = "main_plot", height = "500px")
+          ),
+          nav_panel(
+            "Map",
+            leafletOutput("map", height = "500px")
+          ),
+          
+        )
       )
     )
   ),
@@ -184,13 +234,235 @@ ui <- page_navbar(
     "About Us"
   ),
   nav_spacer()
-  
 )
 
 
 # Server
 server <- function(input, output, session) {
   
+  
+  apply_filters <- function(data) {
+    
+    # Filter by victim type
+    if (input$victim_type == "Fatalities") {
+      data <- data %>%
+        filter(COUNT_PED_KILLED > 0 | COUNT_BICYCLIST_KILLED > 0)
+    } else if (input$victim_type == "Injuries") {
+      data <- data %>%
+        filter(COUNT_PED_INJURED > 0 | COUNT_BICYCLIST_INJURED > 0)
+    }
+    
+    # Filter by road user
+    if (!is.null(input$mode) && length(input$mode) > 0) {
+      ped_selected <- "Pedestrian" %in% input$mode
+      bic_selected <- "Bicyclist" %in% input$mode
+      
+      if (ped_selected && bic_selected) {
+        data <- data %>%
+          filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
+      } 
+      else if (ped_selected) {
+        # Only pedestrian selected
+        data <- data %>%
+          filter(PEDESTRIAN_ACCIDENT == "Y")
+      } 
+      else if (bic_selected) {
+        # Only bicyclist selected
+        data <- data %>%
+          filter(BICYCLE_ACCIDENT == "Y")
+      }
+    } else {
+      data <- data %>%
+        filter(FALSE)
+    }
+    
+    # Filter by location type
+    if (input$location_type == "Intersection") {
+      data <- data %>%
+        filter(INTERSECTION == "Y")
+    } else if (input$location_type == "Non-Intersection") {
+      data <- data %>%
+        filter(INTERSECTION == "N")
+    }
+    
+    # Filter by date
+    if (!is.na(input$date_range[1]) && !is.na(input$date_range[2])) {
+      data <- data %>%
+        filter(
+          !is.na(COLLISION_DATE),
+          COLLISION_DATE >= input$date_range[1],
+          COLLISION_DATE <= input$date_range[2]
+        )
+    }
+    
+    return(data)
+  }
+  
+  # Reactive filtering for graph
+  filtered_data_graph <- reactive({
+    apply_filters(bike_or_ped_acc_all)
+  })
+  
+  # Reactive filtering for map
+  filtered_data_map <- reactive({
+    apply_filters(bike_or_ped_acc_sf)
+  })
+  
+  # Reactive filtering coords for map
+  filtered_coords <- reactive({
+    data <- filtered_data_map()
+    
+    if (nrow(data) == 0) {
+      return(NULL)
+    }
+    
+    coords_matrix <- st_coordinates(data)
+    
+    data %>%
+      st_drop_geometry() %>%
+      mutate(
+        lng = coords_matrix[, 1],
+        lat = coords_matrix[, 2]
+      )
+  })
+  
+  # Main plot output
+  output$main_plot <- renderPlotly({
+    data <- filtered_data_graph()  
+    
+    if (nrow(data) == 0) {
+      plot_ly() %>%
+        layout(
+          title = "No Data Matches Selected Filters",
+          xaxis = list(title = "Year"),
+          yaxis = list(title = "Count"),
+          annotations = list(
+            showarrow = FALSE,
+            xref = "paper",
+            yref = "paper",
+            x = 0.5,
+            y = 0.5,
+            font = list(size = 12)
+          )
+        )
+    } 
+    else {
+      summary_data <- data %>%
+        {if ("geometry" %in% names(.)) st_drop_geometry(.) else .} %>%  
+        mutate(ACCIDENT_YEAR = lubridate::year(COLLISION_DATE)) %>%
+        filter(!is.na(ACCIDENT_YEAR)) %>%
+        group_by(ACCIDENT_YEAR) %>%
+        summarise(
+          Total_Accidents = n(),
+          Fatalities = sum(COUNT_PED_KILLED, na.rm = TRUE) + sum(COUNT_BICYCLIST_KILLED, na.rm = TRUE),
+          Injuries = sum(COUNT_PED_INJURED, na.rm = TRUE) + sum(COUNT_BICYCLIST_INJURED, na.rm = TRUE),
+          .groups = "drop"
+        ) %>%
+        arrange(ACCIDENT_YEAR)
+      
+      if (nrow(summary_data) == 0) {
+        plot_ly() %>%
+          layout(
+            title = "Unable to process data - check date format",
+            annotations = list(
+              showarrow = FALSE,
+              xref = "paper",
+              yref = "paper",
+              x = 0.5,
+              y = 0.5
+            )
+          )
+      } 
+      else {
+        plot_ly(data = summary_data, x = ~ACCIDENT_YEAR) %>%
+          add_trace(
+            y = ~Total_Accidents, 
+            type = "bar", 
+            name = "Total Accidents",
+            marker = list(color = "steelblue")
+          ) %>%
+          layout(
+            title = paste("Accident Data Summary by Year"),
+            xaxis = list(title = "Year"),
+            yaxis = list(title = "Total"),
+            hovermode = "x unified",
+            plot_bgcolor = "rgba(240,240,240,0.5)"
+          )
+      }
+    }
+  })
+  
+  # Map output
+  output$map <- renderLeaflet({
+    data <- filtered_data_map()  # CHANGED: explicitly using map dataset
+    coords <- filtered_coords()
+    
+    # Base map
+    map <- leaflet(
+      options = leafletOptions(
+        attributionControl = FALSE
+      )
+    ) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(
+        data = ca_boundary,
+        fillColor = "lightgreen",
+        fillOpacity = 0.2,
+        color = "black",
+        weight = 2,
+        group = "California"
+      ) %>%
+      addGlPoints(
+        data = crossings_cal,
+        group = "Crossings",
+        opacity = 0.3,
+        radius = 6,
+        fillColor = "black"
+      )
+    
+    if (!is.null(coords) && nrow(coords) > 0) {
+      map <- map %>%
+        addHeatmap(
+          data = coords,
+          lng = ~lng,
+          lat = ~lat,
+          blur = 20,
+          max = 0.05,
+          radius = 15,
+          gradient = c(
+            "0.0" = "blue",
+            "0.3" = "cyan",
+            "0.6" = "yellow",
+            "0.8" = "orange",
+            "1.0" = "red"
+          ),
+          group = "Accident Heatmap"
+        ) %>%
+        addCircleMarkers(
+          data = coords,
+          lng = ~lng,
+          lat = ~lat,
+          radius = 3,
+          stroke = FALSE,
+          fillOpacity = 0.6,
+          group = "Accident Clusters",
+          clusterOptions = markerClusterOptions()
+        )
+    }
+    
+    map %>%
+      addLayersControl(
+        overlayGroups = c(
+          "California",
+          "Crossings",
+          "Accident Heatmap",
+          "Accident Clusters"
+        ),
+        options = layersControlOptions(
+          collapsed = FALSE
+        )
+      )
+  })
 }
 
 # Run the app
