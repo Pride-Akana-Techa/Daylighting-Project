@@ -1,5 +1,10 @@
 # Packages and Data Setup -------------------------------------------------
 
+# fix cluster cut off onto second line
+# add monthly totals to graph
+# add warning if dates are giving incomplete year range for yearly totals graph
+
+
 # load packages
 library(shiny)
 library(plotly)
@@ -11,6 +16,8 @@ library(sf)
 library(scales)
 library(here)
 library(htmlwidgets)
+library(leafgl)
+library(leaflet.extras)
 
 # Theme Setup using the bslib package
 app_theme <- bs_theme(
