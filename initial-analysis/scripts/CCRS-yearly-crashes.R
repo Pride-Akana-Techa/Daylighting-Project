@@ -20,7 +20,7 @@ updated_crashes <- yearly_crashes |>
   filter_out(Year == "2026") |> 
   
   # Remove columns with at least 70% null values 
-  select(-c(IsAOIOneSameAsLocation, IsLocationReferToNarrative, HasDigitalMediaFiles, IsAdditonalObjectStruck, IsCountyRoad, ReportingDistrictCode, PedestrianActionDesc, NotificationDate, MotorVehicleInvolvedWithDesc, MotorVehicleInvolvedWithOtherDesc, MilepostDistance, MilepostMarker, MilepostUnitOfMeasure, `Weather 2`, `Road Condition 2`, MilepostDirection, ReportingDistrict, EvidenceNumber, NotificationTimeDescription, IsAttachmentsMailed, `Collision Type Other Desc`, HitRun, `Special Condition`, SketchDesc, IsFreeway)) |> 
+  select(-c(IsAOIOneSameAsLocation, IsLocationReferToNarrative, HasDigitalMediaFiles, IsAdditonalObjectStruck, IsCountyRoad, ReportingDistrictCode, PedestrianActionDesc, NotificationDate, MotorVehicleInvolvedWithDesc, MotorVehicleInvolvedWithOtherDesc, MilepostDistance, MilepostMarker, MilepostUnitOfMeasure, `Weather 2`, `Road Condition 2`, MilepostDirection, ReportingDistrict, EvidenceNumber, NotificationTimeDescription, IsAttachmentsMailed, `Collision Type Other Desc`, HitRun, `Special Condition`, SketchDesc, IsFreeway, Beat, DispatchNotified, IsDeleted, IsTowAway, `Special Condition`, `Primary Collision Factor Code`, PrimaryCollisionFactorIsCited, PrimaryCollisionPartyNumber, SecondaryUnitOfMeasure, IsAdditonalObjectStruck, HasDigitalMediaFiles, HasPhotographs)) |> 
   
   write_csv(file.path("initial-analysis/scripts/updated-crashes.csv"))
 

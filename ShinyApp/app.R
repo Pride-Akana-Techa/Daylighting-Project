@@ -17,6 +17,7 @@ library(here)
 library(htmlwidgets)
 library(leafgl)
 library(leaflet.extras)
+library(leaflet)
 
 # Theme Setup using the bslib package
 app_theme <- bs_theme(
