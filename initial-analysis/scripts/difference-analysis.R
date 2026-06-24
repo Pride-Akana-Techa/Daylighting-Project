@@ -90,6 +90,7 @@ ccrs_crashes |>
 
 
 # Merged Comparison -------------------------------------------------------
+# All Years from 2014 - 2025 
 
 # TIMS summary
 tims_summary <- tims_crashes |> 
@@ -136,24 +137,77 @@ ggplot(combined_crashes,
     fill = "Dataset"
   )
 
+# 2. Specific Years
+combined_crashes |> 
+  filter()
+ggplot(aes(x = Total_crashes,
+           y = reorder(County, Total_crashes),
+           fill = Source)) +
+  scale_color_viridis_d() +
+  scale_x_continuous(breaks = seq(0, 2000000, by = 100000),
+                     labels = scales::comma,
+                     expand = 0
+  ) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "Crash Counts by County: TIMS vs CCRS",
+    x = "Number of Crashes",
+    y = "County",
+    fill = "Dataset"
+  )
 
 # Comparing Crash Trends --------------------------------------------------
 
 # TIMS
+# Selecting needed variables and making the dataset more uniform and descriptive
 tims_updated <- tims_crashes |> 
-  select(PED_ACTION, LIGHTING, WEATHER_1, ACCIDENT_YEAR, DAY_OF_WEEK, COLLISION_DATE) |> 
+  select(PED_ACTION, LIGHTING, WEATHER_1, ACCIDENT_YEAR, DAY_OF_WEEK, COLLISION_DATE, COUNTY) |> 
   mutate(month = month(ymd(COLLISION_DATE))) |> 
   rename(
     ped_action = PED_ACTION,
     lighting = LIGHTING,
     weather = WEATHER_1,
     year = ACCIDENT_YEAR,
-    day = DAY_OF_WEEK
+    day = DAY_OF_WEEK,
+    county_name = COUNTY
   ) 
+
+tims_months = c(
+  "1" = "January", "2" = "February", "3" = "March", "4" = "April",
+  "5" = "May", "6" = "June", "7" = "July", "8" = "August",
+  "9" = "September", "10" = "October", "11" = "November", "12" = "December" 
+)
+
+tims_days = c(
+  "1" = "Monday", "2" = "Tuesday", "3" = "Wednesday", "4" = "Thursday",
+  "5" = "Friday", "6" = "Saturday", "7" = "Sunday"
+)
+
+tims_lighting = c(
+  "A" = "Daylight", "B" = "Dusk/Dawn", "C" = "Dark",
+  "D" = "Dark", "E" = "Dark"
+)
+
+tims_weather = c(
+  "A" = "Clear", "B" = "Cloudy", "C" = "Raining",
+  "D" = "Other", "E" = "Other", "F" = "Other", "G" = "Other"
+)
+
+tims_updated <- tims_updated |> 
+  mutate(
+    lighting  = tims_lighting[as.character(lighting)],
+    weather = tims_weather[as.character(weather)],
+    day = tims_days[as.character(day)],
+    month = tims_months[as.character(month)],
+    Source = "TIMS",
+    county_name = str_to_title(trimws(county_name))
+  )
+
 
 # CCRS 
 ccrs_updated <- ccrs_crashes |> 
-  select(PedestrianActionCode, LightingDescription, `Weather 1`, Year, `Day Of Week`, Month) |> 
+  select(PedestrianActionCode, LightingDescription, `Weather 1`, Year, `Day Of Week`, Month, county_name) |> 
   rename(
     ped_action = PedestrianActionCode,
     lighting = LightingDescription,
@@ -161,4 +215,109 @@ ccrs_updated <- ccrs_crashes |>
     year = Year,
     day = `Day Of Week`,
     month = Month
+  )
+
+ccrs_updated = ccrs_updated |> 
+  mutate(weather = case_when(
+    weather == "CLEAR" ~ "Clear",
+    weather == "CLOUDY" ~ "Cloudy",
+    weather == "RAINING" ~ "Raining",
+    weather %in% c("WIND", "UNKNOWN", "SNOWING", "SMOKY", "SMOKEY", 
+                      "OTHER", "FOG/VISIBILITY") ~ "Other"
+  ),
+  lighting = case_when(
+    lighting == "DAYLIGHT" ~ "Daylight",                     
+    lighting  %in% c("DARK-STREET LIGHTS NOT FUNCTIONING",
+                               "DARK-STREET LIGHTS",
+                               "DARK-NO STREET LIGHTS") ~ "Dark",
+    lighting =="DUSK-DAWN" ~"Dusk-Dawn"
+  ),
+  Source = "CCRS",
+  county_name = str_to_title(trimws(county_name))
+  ) 
+
+combined_crashes2 <- bind_rows(tims_updated, ccrs_updated)
+
+# Comparing crashes from 2014 - 2025
+combined_crashes2 |> 
+  filter_out(is.na(county_name)) |> 
+  filter(ped_action == "B") |> 
+  group_by(county_name, Source, ped_action) |> 
+  summarize(Total_crashes = n(),
+            .groups = "drop") |>
+ggplot(aes(x = Total_crashes,
+           y = reorder(county_name, Total_crashes),
+           fill = Source)) +
+  scale_color_viridis_d() +
+  scale_x_continuous(breaks = seq(0, 40000, by = 2500),
+                     labels = scales::comma,
+                     expand = 0
+  ) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "Crashes Involving Pedestrians at Intersections by County: TIMS vs CCRS",
+    x = "Number of Crashes",
+    y = "County",
+    fill = "Dataset"
+  )
+
+ggsave(file = "initial-analysis/figs/int-ped-crashes(2014-2025).png",
+       height = 10,
+       width = 15) 
+
+# Comparing just 2025 
+combined_crashes2 |> 
+  filter_out(is.na(county_name)) |> 
+  filter(year == 2025) |> 
+  filter(ped_action == "B") |> 
+  group_by(county_name, Source, ped_action) |> 
+  summarize(Total_crashes = n(),
+            .groups = "drop") |> 
+  ggplot(aes(x = Total_crashes,
+             y = reorder(county_name, Total_crashes),
+             fill = Source)) +
+  scale_color_viridis_d() +
+  scale_x_continuous(breaks = seq(0, 2000, by = 100),
+                     labels = scales::comma,
+                     expand = 0
+  ) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "Crashes Involving Pedestrians at Intersections by County: TIMS vs CCRS",
+    x = "Number of Crashes",
+    y = "County",
+    fill = "Dataset"
+  )
+
+ggsave(file = "initial-analysis/figs/int-ped-crashes-2025.png",
+       height = 10,
+       width = 15) 
+
+
+# Weather
+combined_crashes2 |> 
+  filter_out(is.na(weather)) |> 
+  filter(year == 2025) |> 
+  filter(ped_action == "B") |> 
+  group_by(Source, ped_action, weather) |> 
+  summarize(Total_crashes = n(),
+            .groups = "drop") |>
+  
+  ggplot(aes(x = reorder(weather, Total_crashes),
+             y = Total_crashes,
+             fill = Source)) +
+  scale_color_viridis_d() +
+  scale_y_continuous(breaks = seq(0, 20000, by = 1000),
+                     labels = scales::comma,
+                     expand = 0
+  ) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(
+    title = "Crashes Involving Pedestrians at Intersections by Weather Condition",
+    x = "Weather Condition",
+    y = "Number of Crashes",
+    fill = "Dataset"
   )
