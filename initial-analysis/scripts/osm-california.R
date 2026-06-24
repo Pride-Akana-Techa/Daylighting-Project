@@ -21,6 +21,8 @@ options(tigris_use_cache = TRUE)
 ca_boundary <- states(cb = FALSE) |>
   filter(NAME == "California")
 
+#saveRDS(ca_boundary, "ca_boundary.rds")
+
 # Croswalks from OSM 
 cal_crossings_typed <- oe_get(
   "California",
@@ -162,6 +164,9 @@ cal_filt <- readRDS(here("initial-analysis", "data-clean", "TIMS_Filtered.rds"))
 bike_or_ped_acc <- cal_filt %>%
   filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
 
+# saveRDS(bike_or_ped_acc, "OSM_bike_ped_all.rds")
+
+
 bike_or_ped_acc_geoloc <- bike_or_ped_acc %>%
   filter(!is.na(POINT_X) & !is.na(POINT_Y))
 
@@ -182,6 +187,16 @@ ped_acc_sf <- bike_or_ped_acc_sf %>%
 acc_coords <- st_coordinates(bike_or_ped_acc_sf) |>
   as.data.frame() |>
   rename(lng = X, lat = Y)
+
+coords <- st_coordinates(bike_or_ped_acc_sf)
+
+acc_coords <- bike_or_ped_acc_sf |>
+  mutate(
+    lng = coords[, 1],
+    lat = coords[, 2]
+  )
+
+#saveRDS(acc_coords, "TIMS_bike_ped_data.rds")
 
 
 leaflet() |>
@@ -248,6 +263,47 @@ leaflet() |>
 
 
 
+library(htmlwidgets)
+
+# Assign your map to a variable
+my_interactive_map <- leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+  addPolygons(
+    data        = ca_boundary,
+    fillColor   = "lightgreen",
+    fillOpacity = 0.2,
+    color       = "black",
+    weight      = 2,
+    group       = "California"
+  ) |>
+  addGlPoints(
+    data    = crossings_cal,
+    group   = "Crossings",
+    opacity = 0.3,
+    radius  = 6,
+    fillColor = "black"
+  ) |>
+  addHeatmap(
+    data      = acc_coords,
+    lng       = ~lng,
+    lat       = ~lat,
+    blur      = 20,
+    max       = 0.05,
+    radius    = 15,
+    gradient  = c("0.0" = "blue", "0.3" = "cyan", "0.6" = "yellow", "0.8" = "orange", "1.0" = "red"),
+    group     = "Accident Heatmap"
+  ) |>
+  addLayersControl(
+    overlayGroups = c("California", "Crossings", "Accident Heatmap"),
+    options       = layersControlOptions(collapsed = FALSE)
+  )
+
+# Save as HTML
+saveWidget(my_interactive_map, file = "accident_heat_map.html")
+
+
+
+
 leaflet() |>
   addProviderTiles(providers$CartoDB.Positron) |>
   addPolygons(
@@ -279,6 +335,11 @@ leaflet() |>
     overlayGroups = c("California", "Crossings", "Accident Heatmap"),
     options       = layersControlOptions(collapsed = FALSE)
   )
+
+saveWidget(my_map, file = "my_map.html")
+
+
+
 
 
 
@@ -317,6 +378,9 @@ closest_crash_int <- intersection_incident_geo_sf %>%
                                       crossings_cal[nearest_idx, ], 
                                       by_element = TRUE)
   )
+
+#saveRDS(closest_crash_int, "TIMS_closest_crash_int.rds")
+
 
 under_20_feet <- closest_crash_int |>
   filter(as.numeric(distance_to_osm_int) < 6.096)
