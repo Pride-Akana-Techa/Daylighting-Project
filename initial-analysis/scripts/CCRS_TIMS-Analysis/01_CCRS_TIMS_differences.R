@@ -1,6 +1,17 @@
+
+# -------------------------------------------------------------------------
+# Analyze the differences in crash trends between TIMS and CCRS
+
+# Inputs: initial-analysis/data
+# Outputs: initial-analysis/figs
+# -------------------------------------------------------------------------
+
 # load packages
 library(tidyverse)
 library(sf)
+
+
+# Read and Organize -------------------------------------------------------
 
 # Read Datasets
 tims_crashes <- readRDS("initial-analysis/scripts/TIMS_Filtered.rds")
