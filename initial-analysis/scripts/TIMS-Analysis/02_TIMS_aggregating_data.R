@@ -97,67 +97,6 @@ ggplot(daily_data, aes(x = day, y = ped_killed)) +
                date_labels = "%b %Y") +
   theme_minimal()
 
-library(dplyr)
-library(lubridate)
-library(ggplot2)
-
-graph_data <- daily_data %>%
-  mutate(
-    Year = as.factor(year(day)),
-    # Create a dummy date using a single year (e.g., 2020) so Jan-Dec aligns perfectly
-    Month_Day = as.Date(paste0("2020-", month(day), "-", day(day))),
-    
-    # Highlight status for sizing/coloring
-    Highlight = case_when(
-      Year == "2024" ~ "2024",
-      Year == "2025" ~ "2025",
-      TRUE           ~ "Other"
-    )
-  ) %>%
-  # Aggregate by year and month using our new dummy date
-  group_by(Year, Highlight, Month_Floor = floor_date(Month_Day, "month")) %>%
-  summarize(monthly_killed = sum(ped_killed, na.rm = TRUE), .groups = "drop")
-
-ggplot(graph_data, aes(x = Month_Floor, y = monthly_killed, group = Year, color = Year, size = Highlight)) +
-  geom_line() +
-  
-  # Manually control line thickness: 2024 and 2025 are thick, others are thin
-  scale_size_manual(
-    values = c("2024" = 1.3, "2025" = 1.3, "Other" = 0.5),
-    guide = "none" # Hides the size legend
-  ) +
-  
-  # Manually control colors to pop 2024 and 2025 out against muted grey background lines
-  scale_color_manual(
-    values = c(
-      "2024" = "#E69F00",  # Bright Orange-Gold
-      "2025" = "#0072B2",  # Vivid Blue
-      "2014" = "grey80", "2015" = "grey80", "2016" = "grey80", 
-      "2017" = "grey80", "2018" = "grey80", "2019" = "grey80", 
-      "2020" = "grey80", "2021" = "grey80", "2022" = "grey80", 
-      "2023" = "grey80"
-    )
-  ) +
-  
-  # Format x-axis to show only the month names (Jan - Dec)
-  scale_x_date(
-    date_breaks = "1 month",
-    date_labels = "%b"
-  ) +
-  
-  labs(
-    x = "Month of Year",
-    y = "Pedestrians Killed",
-    title = "Pedestrian Fatalities by Year",
-    subtitle = "Highlighting 2024 and 2025 post-AB 413 implementation trends"
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid.minor = element_blank(),
-    legend.position = "right"
-  )
-
-
 monthly_table <- daily_data %>%
   mutate(month = floor_date(day, "month")) %>%
   group_by(month) %>%
