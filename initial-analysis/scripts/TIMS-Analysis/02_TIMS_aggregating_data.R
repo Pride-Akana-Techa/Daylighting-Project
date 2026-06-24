@@ -1,6 +1,6 @@
 # -------------------------------------------------------------------------
 # 02_TIMS_aggregating_data
-# Code contains different aggregations and graph outputs
+# Code contains different graph outputs and aggregations for TIMS data 
 # -------------------------------------------------------------------------
 # load libraries
 
@@ -13,6 +13,8 @@ library(leaflet.extras)
 library(lubridate)
 library(here)
 library(readr)
+library(dplyr)
+
 
 # -------------------------------------------------------------------------
 # load cleaned data 
@@ -71,6 +73,8 @@ daily_data <- cal_filt |>
   arrange(day)
 
 
+# -------------------------------------------------------------------------
+# deaths by month for all years
 ggplot(daily_data, aes(x = day, y = ped_killed)) +
   stat_summary(
     aes(x = floor_date(day, "month")),
@@ -81,13 +85,11 @@ ggplot(daily_data, aes(x = day, y = ped_killed)) +
              color = "blue", size = 2, alpha = .5) +
   geom_vline(xintercept = daylight_enforce_date,
              color = "green", size = 2, alpha = .5) +
-
 # warning period   
   annotate("rect",
            xmin = daylight_warn_date,
            xmax = daylight_enforce_date,
            ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "lightblue") +
-  
 # enforcement period 
   annotate("rect",
            xmin = daylight_enforce_date,
@@ -97,30 +99,35 @@ ggplot(daily_data, aes(x = day, y = ped_killed)) +
                date_labels = "%b %Y") +
   theme_minimal()
 
-monthly_table <- daily_data %>%
-  mutate(month = floor_date(day, "month")) %>%
-  group_by(month) %>%
-  summarize(
-    killed = sum(killed, na.rm = TRUE),
-    ped_killed = sum(ped_killed, na.rm = TRUE),
-    ped_injured = sum(ped_injured, na.rm = TRUE),
-    bike_killed = sum(bike_killed, na.rm = TRUE),
-    bike_injured = sum(bike_injured, na.rm = TRUE),
-    injured = sum(injured, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  arrange(month)
+# -------------------------------------------------------------------------
+# deaths by month by year 
+monthly_data <- cal_filt %>%
+  mutate(
+    dummy_date = as.Date(paste0("3000-", month(COLLISION_DATE), "-01"))) |>
+  group_by(ACCIDENT_YEAR, dummy_date) |>
+  summarize(ped_killed = sum(COUNT_PED_KILLED, na.rm = TRUE), .groups = "drop")
 
-monthly_table
+years <- unique(as.character(monthly_data$ACCIDENT_YEAR))
+
+ggplot(monthly_data, aes(x = dummy_date, y = ped_killed, group = ACCIDENT_YEAR, color = ACCIDENT_YEAR)) +
+  geom_line(size = 1) + 
+    scale_color_gradientn(
+    colors = rainbow(7), 
+    breaks = unique(monthly_data$ACCIDENT_YEAR)
+  ) +
+  
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  theme_minimal()
 
 
+# -------------------------------------------------------------------------
+# deaths by day of week by year 
 dow_data <- cal_filt %>%
   group_by(ACCIDENT_YEAR, day_of_week = DAY_OF_WEEK) %>%
   summarize(
     ped_killed = sum(COUNT_PED_KILLED, na.rm = TRUE),
     bike_killed = sum(COUNT_BICYCLIST_KILLED, na.rm = TRUE)
   )
-
 
 dow_data <- dow_data %>%
   mutate(day_of_week_name = factor(
@@ -129,9 +136,8 @@ dow_data <- dow_data %>%
     labels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
   ))
 
-
-# ggplot(dow_data, aes(fill = ACCIDENT_YEAR, x = day_of_week_name, 
-#                      y = ped_killed, 
-#                      group = factor(ACCIDENT_YEAR))) +
-#   geom_bar(position="dodge", stat="identity")
+ggplot(dow_data, aes(fill = ACCIDENT_YEAR, x = day_of_week_name,
+                     y = ped_killed,
+                     group = factor(ACCIDENT_YEAR))) +
+  geom_bar(position="dodge", stat="identity")
 
