@@ -1,3 +1,12 @@
+## -------------------------------------------------------------------------
+## Exploratory analysis using the CCRS dataset to examine variation in
+## crashes involving pedestrians at intersections by periods of the day and
+## weather conditions.
+
+## Inputs: 
+## Outputs:
+
+
 # load packages
 library(tidyverse)
 

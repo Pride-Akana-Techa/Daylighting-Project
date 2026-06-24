@@ -1,3 +1,9 @@
+
+# -------------------------------------------------------------------------
+# Combine TIMS and CCRS datasets by same dates and coordinates(latitude and 
+# longitudes) 
+# -------------------------------------------------------------------------
+
 # load packages
 library(tidyverse)
 library(sf)
@@ -7,7 +13,7 @@ tims_crashes <- readRDS("initial-analysis/scripts/TIMS_Filtered.rds")
 ccrs_crashes <- read_csv("initial-analysis/scripts/updated-crashes.csv")
 
 
-# Rename the Variables and Standardize the Case ID column
+# Rename the Variables and Standardize similar columns
 ccrs_clean <- ccrs_crashes |> 
   rename(
     case_id =  `Collision Id`,
