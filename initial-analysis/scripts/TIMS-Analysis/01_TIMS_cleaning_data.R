@@ -21,14 +21,13 @@ library(lubridate)
 # -------------------------------------------------------------------------
 # Data Combining 
 
-# combines county data into statewide dataset and saves as Crashes_California
+#combines county data into statewide dataset and saves as Crashes_California
 
-# combined_data <- list.files(path = "C:/Users/kylek/OneDrive/Desktop/TIMS_Crash_Data", 
-#                             pattern = "\\.csv$", full.names = TRUE) |> 
-#   map_df(~read_csv(.x, col_types = cols(.default = "c"))) |>
-#   
-#   write_csv(file.path("initial-analysis/data-raw/TIMS_Crashes_California.csv"))
+combined_data <- list.files(path = "initial-analysis/data-raw/TIMS_Crash_Data_Counties",
+                            pattern = "\\.csv$", full.names = TRUE) |>
+  map_df(~read_csv(.x, col_types = cols(.default = "c"))) |>
 
+  write_csv(file.path("initial-analysis/data-raw/TIMS_Crashes_California.csv"))
 
 # loads in california_crashes 
 california_crashes <- read_csv("initial-analysis/data-raw/TIMS_Crashes_California.csv")
