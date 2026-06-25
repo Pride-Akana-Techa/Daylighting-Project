@@ -36,7 +36,7 @@ california_crashes <- read_csv("initial-analysis/data-raw/TIMS_Crashes_Californi
 #Data Filtering
 
 # Remove columns that are not needed for study, removes observations
-# that have duplicate CASE_ID
+# that have duplicate CASE_ID (YW: still duplicates?)
 cal_filt <- california_crashes |>
   select(-OFFICER_ID, -REPORTING_DISTRICT, -CITY_DIVISION_LAPD, 
          -BEAT_NUMBER, -DIRECTION, -CALTRANS_COUNTY, -CALTRANS_DISTRICT,
@@ -81,7 +81,7 @@ cal_geo <- cal_filt |>
     POINT_Y = as.numeric(as.character(POINT_Y))) |>
   filter(!is.na(POINT_X), !is.na(POINT_Y))
 
-# initialize using 4269 - NAD83 
+# initialize using 4269 - NAD83  (YW: WGS84: https://tims.berkeley.edu/help/tools/analysis/gis-map.php)
 cal_nad83 <- st_as_sf(cal_geo, coords = c("POINT_X", "POINT_Y"), 
                                 crs = 4269)
 
