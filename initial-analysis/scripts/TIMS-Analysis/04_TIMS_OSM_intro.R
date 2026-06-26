@@ -1,3 +1,8 @@
+# -------------------------------------------------------------------------
+# 04_TIMS_OSM_intro
+# 
+# -------------------------------------------------------------------------
+# load libraries
 library(osmextract)   # download OpenStreetMap data as sf objects
 library(sfnetworks)   # road network graph (nodes = intersections, edges = segments)
 library(dodgr)        # fast weighted graph distances on street networks
@@ -15,16 +20,16 @@ library(readr)
 library(leaflet.extras)
 options(tigris_use_cache = TRUE)
 
-##### Data Cleaning and Prep ####
+# -------------------------------------------------------------------------
+#OSM data cleaning and prep
 
-# Outline of California State #
+# Outline of California State 
 ca_boundary <- states(cb = FALSE) |>
   filter(NAME == "California")
+saveRDS(ca_boundary, "initial-analysis/data-clean/ca_boundary.rds")
 
-#saveRDS(ca_boundary, "ca_boundary.rds")
-
-# Croswalks from OSM 
-cal_crossings_typed <- oe_get(
+# Croswalk data from OSM for the state of california
+cal_crossings_raw <- oe_get(
   "California",
   layer                 = "points",
   extra_tags            = c("crossing", "traffic_signals", "crossing:island", "lit"),
@@ -33,7 +38,7 @@ cal_crossings_typed <- oe_get(
   quiet                 = TRUE
 )
 
-# Roads from OSM 
+# Road data from OSM for the state of california 
 cal_streets_raw <- oe_get(
   "California",
   layer = "lines",
@@ -52,17 +57,19 @@ cal_streets_raw <- oe_get(
   quiet = TRUE
 )
 
-
-# Filter for within California
-crossings_cal <- st_filter(cal_crossings_typed, 
-                           st_transform(ca_boundary, st_crs(cal_crossings_typed)))
+# filter for within California - removes misqueried data 
+crossings_cal <- st_filter(cal_crossings_raw, 
+                           st_transform(ca_boundary, st_crs(cal_crossings_raw)))
 streets_cal <- st_filter(cal_streets_raw, 
                          st_transform(ca_boundary, st_crs(cal_streets_raw)))
 
-# saveRDS(streets_cal, "OSM_california_crossings.rds")
-
-
-# Convert the crossing type into cleaned columns 
+# -------------------------------------------------------------------------
+# Clean Open Street Map data 
+# -------------------------------------------------------------------------
+  # Crossings
+# convert the crossing type into cleaned columns
+# creates column with 5 different types of intersections
+# signalized, marked (zebra), uncontrolled, unmarked, unspecified
 crossings_cal <- crossings_cal |>
   mutate(crossing_type = case_when(
     !is.na(traffic_signals) & traffic_signals == "signal" 
@@ -92,45 +99,21 @@ crossings_cal <- crossings_cal |>
     ~ "Unspecified"
   ))
 
-# remove unecessary columns 
+# remove unecessary columns / columns without enough information
 crossings_cal <- crossings_cal |>
   select(-name, -barrier, -ref, -address, -is_in, -place, -man_made,
         -traffic_signals, -lit, -other_tags, -crossing, -highway)
 
 # saveRDS(crossings_cal, "OSM_california_crossings.rds")
 
+  # Streets
 # Convert the speedlimit column into clean rounded up to every 5 values
 streets_cal <- streets_cal |>
   mutate(
     max_speed_round = case_when(
-      maxspeed %in% c("3 mph", "4 mph", "5 mph") ~ "5 mph", 
-      maxspeed %in% c("7 mph", "8 mph", "9 mph", "10", "10 mph") ~ "10 mph",
-      maxspeed %in% c("12 mph", "13 mph", "14 mph", "15", "15 mph") ~ "15 mph",
-      maxspeed %in% c("16 mph", "17 mph", "18 mph", "19 mph", "20", "20 mph") ~ "20 mph",
-      maxspeed %in% c("23 mph", "24", "24 mph", "25", "25 mph") ~ "25 mph",
-      maxspeed %in% c("30", "30 mph") ~ "30 mph",
-      maxspeed %in% c("32 mph", "33 mph", "34 mph", "35", "35 mph;30 mph",
-                      "35 mph;25 mph", "35 mph") ~ "35 mph",
-      maxspeed %in% c("40", "40 mph;35 mph", "40 mph") ~ "40 mph",
-      maxspeed %in% c("45", "45 mph") ~ "45 mph",
-      maxspeed %in% c("50", "50 mph") ~ "50 mph",
-      maxspeed %in% c("50 mph;55 mph", "51 mph", "53 mph", "54 mph", "55",
-                      "55-40", "55 mph;40 mph", "55 mph;50 mph", "55 mph") ~ "55 mph",
-      maxspeed %in% c("60", "60 mph") ~ "60 mph",
-      maxspeed %in% c("65 mph") ~ "65 mph",
-      maxspeed %in% c("70 mph") ~ "70 mph",
-      maxspeed %in% c("75 mph") ~ "75 mph"
-      )
-  )
-
-print(table(streets_cal$max_speed_round))
-
-streets_cal <- streets_cal |>
-  select(-waterway, -aerialway, -barrier, -man_made, -railway, -traffic_calming,
-         -lit, -parking)
-
-print(table(streets_cal$num_lanes))
-
+      TRUE ~ paste0(round(as.numeric(stringr::str_extract(maxspeed, "\\d+")) / 5) * 5, " mph")
+    )
+)
 
 # Clean number of lanes data
 streets_cal <- streets_cal |>
@@ -149,60 +132,96 @@ streets_cal <- streets_cal |>
   )
 )
 
+# Remove unnecessary columns 
+streets_cal <- streets_cal |>
+  select(-waterway, -aerialway, -barrier, -man_made, -railway, -traffic_calming,
+         -lit, -parking)
+
 # saveRDS(streets_cal, "OSM_california_streets.rds")
-# saveRDS(crossings_cal, "OSM_california_crossings.rds")
 
 
 
+# -------------------------------------------------------------------------
+# TIMS Data
 
+cal_filt <- readRDS(here("initial-analysis", "data-clean", "01_TIMS_Cleaned.rds"))
 
-##### TIMS Data ######
-#california_crashes <- read_csv(here("initial-analysis", "data-raw", "TIMS_Crashes_California.csv"))
-
-cal_filt <- readRDS(here("initial-analysis", "data-clean", "TIMS_Filtered.rds"))
-
-bike_or_ped_acc <- cal_filt %>%
+bike_or_ped_acc <- cal_filt |>
   filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
 
-# saveRDS(bike_or_ped_acc, "OSM_bike_ped_all.rds")
+# saveRDS(bike_or_ped_acc, "OSM_bike_ped_accidents.rds")
+
+cal_albers <- readRDS(here("initial-analysis", "data-clean", "02_TIMS_Geocoded.rds"))
+
+bike_or_ped_acc_geo <- cal_albers|>
+  filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
 
 
-bike_or_ped_acc_geoloc <- bike_or_ped_acc %>%
-  filter(!is.na(POINT_X) & !is.na(POINT_Y))
-
-bike_or_ped_acc_sf <- bike_or_ped_acc_geoloc |>
-  st_as_sf(
-    coords = c("POINT_X", "POINT_Y"),
-    crs = 4326
-  )
-
-bike_or_ped_acc_sf <- st_filter(bike_or_ped_acc_sf, 
-                           st_transform(ca_boundary, st_crs(bike_or_ped_acc_sf)))
-
-bike_acc_sf <- bike_or_ped_acc_sf %>%
+bike_acc_geo <- bike_or_ped_acc_geo |>
   filter(BICYCLE_ACCIDENT == "Y")
-ped_acc_sf <- bike_or_ped_acc_sf %>%
+ped_acc_geo <- bike_or_ped_acc_geo |>
   filter(PEDESTRIAN_ACCIDENT == "Y")
 
-acc_coords <- st_coordinates(bike_or_ped_acc_sf) |>
+coords <- st_coordinates(bike_or_ped_acc_geo) |>
   as.data.frame() |>
   rename(lng = X, lat = Y)
 
-coords <- st_coordinates(bike_or_ped_acc_sf)
+coords <- st_coordinates(bike_or_ped_acc_geo)
 
-acc_coords <- bike_or_ped_acc_sf |>
+bike_or_ped_acc_geo <- bike_or_ped_acc_geo |>
   mutate(
     lng = coords[, 1],
     lat = coords[, 2]
   )
 
+# Match a second layer to your California Albers layer
+ca_boundary <- st_transform(ca_boundary, crs = st_crs(cal_albers))
+crossings_cal <- st_transform(crossings_cal, crs = st_crs(cal_albers))
+streets_cal <- st_transform(streets_cal, crs = st_crs(cal_albers))
+
 #saveRDS(acc_coords, "TIMS_bike_ped_data.rds")
 
 
+
+library(sf)
+library(here)
+library(dplyr)
+
+# 1. Load your primary TIMS geocoded data (Ensure it is explicitly set to 3310)
+cal_albers <- readRDS(here("initial-analysis", "data-clean", "02_TIMS_Geocoded.rds")) %>%
+  st_transform(3310)
+
+# 2. Filter down to your specific incident types
+bike_or_ped_acc_geo <- cal_albers %>%
+  filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
+
+bike_acc_geo <- bike_or_ped_acc_geo %>% filter(BICYCLE_ACCIDENT == "Y")
+ped_acc_geo  <- bike_or_ped_acc_geo %>% filter(PEDESTRIAN_ACCIDENT == "Y")
+
+# 3. Extract and bind the Projected Coordinates (Units are Meters, not Lng/Lat)
+coords <- st_coordinates(bike_or_ped_acc_geo)
+bike_or_ped_acc_geo <- bike_or_ped_acc_geo %>%
+  mutate(
+    X_meters = coords[, 1],
+    Y_meters = coords[, 2]
+  )
+
+# 4. Correctly transform all supporting layers to match California Albers (3310)
+ca_boundary   <- st_transform(ca_boundary, crs = 3310)
+crossings_cal <- st_transform(crossings_cal, crs = 3310) 
+streets_cal   <- st_transform(streets_cal, crs = 3310)    
+
+
+library(leaflet)
+library(leafgl) 
+library(sf)
+
 leaflet() |>
   addProviderTiles(providers$CartoDB.Positron) |>
+  
+  # 1. Transform California boundary to WGS84 for display
   addPolygons(
-    data = ca_boundary,
+    data = st_transform(ca_boundary, 4326),
     fillColor = "lightgreen",
     fillOpacity = 0.2,
     color = "black",
@@ -212,17 +231,19 @@ leaflet() |>
   addGlPoints(
     data = crossings_cal,
     group = "Crossings",
-    opacity = .4,
-    radius = 6
-  ) |>
-  addGlPoints(
-    data = bike_or_ped_acc_sf,
-    group = "Accidents",
     opacity = .3,
+    radius = 6,
+    fillColor = "black"
+  ) |>
+  
+  # 2. Transform your TIMS crash point layer to WGS84 for display
+  addGlPoints(
+    data = st_transform(bike_or_ped_acc_geo, 4326),
+    group = "Accidents",
+    opacity = 0.3,
     radius = 6,
     fillColor = "red"
   )
-
 
 
 leaflet() |>
@@ -243,14 +264,14 @@ leaflet() |>
     fillColor = "black"
   ) |>
   addGlPoints(
-    data = ped_acc_sf,
+    data = ped_acc_geo,
     group = "Ped Accidents",
     opacity = .5,
     radius = 6,
     fillColor = "red"
   ) |>
   addGlPoints(
-    data = bike_acc_sf,
+    data = bike_acc_geo,
     group = "Bike Accidents",
     opacity = .5,
     radius = 6,
@@ -298,9 +319,6 @@ my_interactive_map <- leaflet() |>
     options       = layersControlOptions(collapsed = FALSE)
   )
 
-# Save as HTML
-saveWidget(my_interactive_map, file = "accident_heat_map.html")
-
 
 
 
@@ -336,7 +354,7 @@ leaflet() |>
     options       = layersControlOptions(collapsed = FALSE)
   )
 
-saveWidget(my_map, file = "my_map.html")
+saveWidget(my_interactive_map, file = "accident_heat_map.html")
 
 
 
