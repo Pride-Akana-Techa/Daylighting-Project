@@ -1,0 +1,12 @@
+name: ShinyApp
+title: ShinyApp
+username: kyleklemba
+account: kyleklemba
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17552698
+bundleId: 12183570
+url: https://kyleklemba.shinyapps.io/ShinyApp/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

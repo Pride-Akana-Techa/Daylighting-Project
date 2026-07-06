@@ -5,4 +5,9 @@
 .positai
 initial-analysis/scripts/CCRS-statewide-crashes.csv
 initial-analysis/scripts/updated-crashes.csv
-
+initial-analysis/data-raw/OSM_california_crossings.rds
+initial-analysis/data-raw/OSM_california_roads.rds
+initial-analysis/data-raw/OSM_california_streets.rds
+initial-analysis/data-raw/TIMS_California_Crashes.rds
+initial-analysis/data-raw/TIMS_California_Crashes.csv
+initial-analysis/data-raw/daily_data.csv

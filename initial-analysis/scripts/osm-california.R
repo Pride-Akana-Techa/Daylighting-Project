@@ -13,13 +13,20 @@ library(leafgl)
 library(here)
 library(readr)
 library(leaflet.extras)
-options(tigris_use_cache = TRUE)
+library(igraph)
+options(tigris_use_cache = TRUE) # Helps to download once, store locally, and reuse later
+library(htmlwidgets)
 
 ##### Data Cleaning and Prep ####
 
-# Outline of California State #
+# Outline of California State:  #
 ca_boundary <- states(cb = FALSE) |>
   filter(NAME == "California")
+
+ca_boundary <- st_transform(
+  ca_boundary, 
+  crs = 4326
+)
 
 # Croswalks from OSM 
 cal_crossings_typed <- oe_get(
@@ -90,7 +97,7 @@ crossings_cal <- crossings_cal |>
     ~ "Unspecified"
   ))
 
-# remove unecessary columns 
+# remove unnecessary columns 
 crossings_cal <- crossings_cal |>
   select(-name, -barrier, -ref, -address, -is_in, -place, -man_made,
         -traffic_signals, -lit, -other_tags, -crossing, -highway)
@@ -124,8 +131,8 @@ streets_cal <- streets_cal |>
 print(table(streets_cal$max_speed_round))
 
 streets_cal <- streets_cal |>
-  select(-waterway, -aerialway, -barrier, -man_made, -railway, -traffic_calming,
-         -lit, -parking)
+  select(-c(waterway, aerialway, barrier, man_made, railway, traffic_calming,
+         lit, parking))
 
 print(table(streets_cal$num_lanes))
 
@@ -154,36 +161,51 @@ streets_cal <- streets_cal |>
 
 
 
-##### TIMS Data ######
+##### CCRS Data ######
 #california_crashes <- read_csv(here("initial-analysis", "data-raw", "TIMS_Crashes_California.csv"))
 
-cal_filt <- readRDS(here("initial-analysis", "data-clean", "TIMS_Filtered.rds"))
+# Loading the dataset
+cal_filt <- read_csv("initial-analysis/scripts/updated-crashes.csv")
 
-bike_or_ped_acc <- cal_filt %>%
-  filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
+# Filter for pedestrian and bicycle accidents
+bike_ped_acc <- cal_filt |> 
+  filter_out(PedestrianActionCode == "A") |> 
+  filter(MotorVehicleInvolvedWithCode %in% c("B", "G"))
 
-bike_or_ped_acc_geoloc <- bike_or_ped_acc %>%
-  filter(!is.na(POINT_X) & !is.na(POINT_Y))
+# filter only valid geolocations
+bike_ped_acc_geoloc <- bike_ped_acc |> 
+  filter_out(is.na(Longitude)) |> 
+  filter_out(is.na(Latitude)) |> 
+  filter_out(
+    Longitude < -180 | Longitude > 180 |
+      Latitude < -90 | Latitude > 90
+  )
 
-bike_or_ped_acc_sf <- bike_or_ped_acc_geoloc |>
+# Convert geolocations to sf objects
+bike_ped_acc_sf <- bike_ped_acc_geoloc |>
   st_as_sf(
-    coords = c("POINT_X", "POINT_Y"),
+    coords = c("Longitude", "Latitude"),
     crs = 4326
   )
 
-bike_or_ped_acc_sf <- st_filter(bike_or_ped_acc_sf, 
-                           st_transform(ca_boundary, st_crs(bike_or_ped_acc_sf)))
+# Limit to the boundaries of California
+bike_ped_acc_sf <- st_filter(bike_ped_acc_sf, 
+                           st_transform(ca_boundary, 
+                                        st_crs(bike_ped_acc_sf)))
 
-bike_acc_sf <- bike_or_ped_acc_sf %>%
-  filter(BICYCLE_ACCIDENT == "Y")
-ped_acc_sf <- bike_or_ped_acc_sf %>%
-  filter(PEDESTRIAN_ACCIDENT == "Y")
+# Separate bicycle and pedestrian accidents
+bike_acc_sf <- bike_ped_acc_sf |> 
+  filter(MotorVehicleInvolvedWithCode == "G")
 
-acc_coords <- st_coordinates(bike_or_ped_acc_sf) |>
+ped_acc_sf <- bike_ped_acc_sf |> 
+  filter(MotorVehicleInvolvedWithCode == "B")
+
+# Extracting lat and lng coordinates to normal data frame
+acc_coords <- st_coordinates(bike_ped_acc_sf) |>
   as.data.frame() |>
   rename(lng = X, lat = Y)
 
-
+# Heatmap of crashes and crosswalks
 leaflet() |>
   addProviderTiles(providers$CartoDB.Positron) |>
   addPolygons(
@@ -201,7 +223,7 @@ leaflet() |>
     radius = 6
   ) |>
   addGlPoints(
-    data = bike_or_ped_acc_sf,
+    data = bike_ped_acc_sf,
     group = "Accidents",
     opacity = .3,
     radius = 6,
@@ -248,7 +270,7 @@ leaflet() |>
 
 
 
-leaflet() |>
+crash_crosswalk_map <- leaflet() |>
   addProviderTiles(providers$CartoDB.Positron) |>
   addPolygons(
     data        = ca_boundary,
@@ -280,6 +302,127 @@ leaflet() |>
     options       = layersControlOptions(collapsed = FALSE)
   )
 
+# Saving the as an html widget
+saveWidget(crash_crosswalk_map, 
+           file = "initial-analysis/figs/crash_crosswalk_map.html",
+           selfcontained = TRUE)
+
+
+# San Francisco spatial analysis ------------------------------------------
+
+
+### SAN FRANCISCO ###
+# Get SF county boundary
+ca_counties <- counties(state = "CA", cb = TRUE)
+
+sf_boundary <- ca_counties |>
+  filter(NAME == "San Francisco") |>
+  st_transform(4326)
+
+# Filter crashes to SF
+bike_ped_acc_sf <- bike_ped_acc_sf |>
+  st_filter(sf_boundary)
+
+bike_acc_sf <- bike_ped_acc_sf |>
+  filter(MotorVehicleInvolvedWithCode == "G")
+
+ped_acc_sf <- bike_ped_acc_sf |>
+  filter(MotorVehicleInvolvedWithCode == "B")
+
+# Filter for crossings and roads only in SF
+crossings_sf <- crossings_cal |>
+  st_filter(sf_boundary)
+
+streets_sf <- streets_cal |>
+  st_filter(sf_boundary)
+
+
+# Building Intersections
+# Convert streets to a network
+SF_net <- as_sfnetwork(
+  streets_sf,
+  directed = FALSE
+)
+
+# Extract nodes
+intersection_nodes <- SF_net |>
+  activate(nodes) |>
+  st_as_sf()
+
+# Calculate node degree to keep only true intersections
+library(tidygraph)
+
+## Degree Interpretation:
+  
+  # 1 = dead end
+  # 2 = mid-block node
+  # 3+ = actual intersection
+
+intersection_nodes <- SF_net |>
+  activate(nodes) |>
+  mutate(degree = centrality_degree()) |>
+  st_as_sf()
+
+true_intersections <- intersection_nodes |>
+  filter(degree >= 3)
+
+# Using projected CRS to have distances in meters
+bike_ped_acc_sf_proj <- st_transform(bike_ped_acc_sf, 26910)
+true_intersections_proj <- st_transform(true_intersections, 26910)
+
+# Find the nearest intersection
+nearest_int <- st_nearest_feature(
+  bike_ped_acc_sf_proj,
+  true_intersections_proj
+)
+
+# Calculate distance between crash and intersection
+bike_ped_acc_sf_proj$nearest_intersection_dist_m <- 
+  st_distance(
+    bike_ped_acc_sf_proj,
+    true_intersections_proj[nearest_int, ],
+    by_element = TRUE
+  ) |>
+  as.numeric()
+
+# Categorize the distances
+bike_ped_acc_sf_proj <- bike_ped_acc_sf_proj |>
+  mutate(
+    distance_band = case_when(
+      nearest_intersection_dist_m <= 15.24 ~ "0-50 ft",
+      nearest_intersection_dist_m <= 30.48 ~ "50-100 ft",
+      nearest_intersection_dist_m <= 45.72 ~ "100-150 ft",
+      TRUE ~ ">150 ft"
+    )
+  )
+
+bike_ped_acc_sf_proj <- bike_ped_acc_sf_proj |>
+  mutate(
+    distance_band = factor(
+      distance_band,
+      levels = c(
+        "0-50 ft",
+        "50-100 ft",
+        "100-150 ft",
+        ">150 ft"
+      )
+    )
+  )
+
+bike_ped_acc_sf_proj |>
+  st_drop_geometry() |>
+  count(Year, distance_band) |>
+  ggplot(aes(x = Year, y = n, fill = distance_band)) +
+  geom_col() +
+  scale_color_viridis_d() +
+  scale_x_continuous(breaks = seq(2016, 2025, by = 1)) +
+  theme_minimal() +
+  labs(
+    x = "Year",
+    y = "Number of Crashes",
+    fill = "Distance from Nearest Intersection"
+  )
+
 
 
 # 20 feet buffer 
@@ -294,14 +437,9 @@ buffers_20ft   <- st_transform(buffers_proj, 4326)   # back to WGS84 for mapping
 
 print(table(crossings_cal$crossing_type))
 
-crossings_cal <- crossings_cal |>
-  select(-name, -barrier, -ref, -address, -is_in, -place, -man_made, -traffic_signals,
-         -highway, -crossing, -other_tags)
 
 
-
-
-intersection_incident_geo <- bike_or_ped_acc_geoloc |>
+intersection_incident_geo <- bike_ped_acc_geoloc |>
   filter(INTERSECTION == "Y" | (INTERSECTION == "N") & DISTANCE <= 20)
 
 intersection_incident_geo_sf <- st_as_sf(bike_or_ped_acc_geoloc,
