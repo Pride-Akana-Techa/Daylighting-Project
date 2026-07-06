@@ -1,11 +1,11 @@
-# Packages and Data Setup -------------------------------------------------
+# ==========================================================================
+# Packages, data and styling
+# ==========================================================================
 
-# add monthly totals to graph
-# add warning if dates are giving incomplete year range for yearly totals graph
+# Libraries
 
-
-# load packages
 library(shiny)
+library(shinyjs)
 library(plotly)
 library(tidyverse)
 library(bslib)
@@ -17,452 +17,646 @@ library(here)
 library(htmlwidgets)
 library(leafgl)
 library(leaflet.extras)
-library(leaflet)
 
-# Theme Setup using the bslib package
+# Palette
+brand <- list(
+  navy       = "#0A1128",   # text headings / rules
+  ink        = "#1C2541",   # narrative text
+  muted      = "#64748B",   # metadata labels
+  surface    = "#F8FAFC",   
+  border     = "#E2E8F0",   
+  highlight  = "#EEF2F6",
+  link       = "#F5ECD7",
+  accent     = "#DC2626"    
+)
+
 app_theme <- bs_theme(
   version      = 5,
-  bg           = "white",
-  fg           = "black",
-  primary      = "navy",
-  base_font    = font_google("Inter"),
-  heading_font = font_google("DM Sans")
-)
+  bg           = "white", # background color
+  fg           = brand$ink, # foreground color 
+  primary      = brand$navy, # primary color
+  secondary    = brand$muted, #secondary color
+  base_font    = font_google("Inter"), # text font
+  heading_font = font_google("Playfair Display") # header font
+) %>%
+  bs_add_rules(sprintf("
+    :root {
+     /* Brand Colors */
+      --brand-navy: %s;
+      --brand-ink: %s;
+      --brand-muted: %s;
+      --brand-surface: %s;
+      --brand-border: %s;
+      --brand-highlight: %s;
+      --brand-link: %s;
+      --brand-accent: %s;
+    }
 
-# Load data
+     /* Default Page */
+    html, body { height: 100%%; background-color: #FFFFFF; font-size: 0.95rem; -webkit-font-smoothing: antialiased; }
 
-# OSM Pedestrian Crossings
-crossings_cal <- readRDS(here("initial-analysis", "data-raw", "OSM_california_crossings.rds"))
+     /* Two column */
+    .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
 
-# California state boundary
-ca_boundary <- readRDS(here("initial-analysis", "data-clean", "ca_boundary.rds"))
-
-# Bike or ped crash data 
-bike_or_ped_acc_all <- readRDS(here("initial-analysis", "data-raw", "TIMS_bike_ped_all.rds"))
-
-
-# Bike or ped geolocated crash data only
-bike_or_ped_acc_sf <- readRDS(here("initial-analysis", "data-raw", "TIMS_bike_ped_geo.rds"))
-
-# Data preparation: ensure COLLISION_DATE is in Date format for both datasets
-bike_or_ped_acc_all <- bike_or_ped_acc_all %>%
-  mutate(
-    COLLISION_DATE = as.Date(COLLISION_DATE)
-  )
-
-bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
-  mutate(
-    COLLISION_DATE = as.Date(COLLISION_DATE)
-  )
-
-
-# Shiny App ---------------------------------------------------------------
-
-# UI
-ui <- page_navbar(
-  title = div(
-    style = "margin-right: 25px;",
-    "California Assembly Bill 413: Daylighting Law",
-    div(
-      "Investigating the Impacts of Daylighting on Pedestrian and Bicyclist Safety",
-      style = "font-size: 13px;"
-    ),
-    tags$img(
-      src = "Virginia-Tech-Logo.png",
-      height = "40px",
-      style = "position: absolute; top: 8px; right: 20px;"
-    )
-  ),
-  theme = app_theme,
-  bg = "navy",
-  
-  nav_panel(
-    "Overview",
-    
-    layout_columns(
-      col_widths = c(5, 7),
-      gap = "1.2rem",
-      
-      # Left column
-      div(
-        card(
-          card_header("About the Law"),
-          card_body(
-            p(
-              "On October 10, 2023,",
-              tags$a(
-                href   = "https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB413",
-                target = "_blank",
-                "California Assembly Bill 413 (AB 413)"
-              ),
-              "was signed into law. This law prohibits parking within 20 feet of
-            the approach side of marked and unmarked crosswalks at 
-            intersections, a practice known as", tags$em("daylighting"), ", with
-            the aim of:"
-            ),
-            tags$ul(
-              tags$li("improving sightlines at intersections"),
-              tags$li("increasing driver awareness of crossing road users, and
-                    ultimately"),
-              tags$li("reducing pedestrian and bicyclist fatalities.")
-            )
-          )
-        ),
-        img(
-          src = "SFA-Daylighting.jpg",
-          width = "100%",
-          height = "50%"
-        )
-      ),
-      
-      # Right Column
-      div(
-        p(tags$strong("Enforcement timeline:")),
-        layout_columns(
-          col_widths = c(4, 4, 4),
-          gap = "0.4rem",
-          div(
-            style = "background:#FEE2E2; color:#991B1B; border-radius:8px;
-                       padding:8px; font-size:0.78rem; text-align:center;",
-            tags$strong("Pre-law"), br(),
-            tags$small("Before Jan 2024")
-          ),
-          div(
-            style = "background:#FEF3C7; color:#92400E; border-radius:8px;
-                       padding:8px; font-size:0.78rem; text-align:center;",
-            tags$strong("Warning phase"), br(),
-            tags$small("Jan 2024")
-          ),
-          div(
-            style = "background:#D1FAE5; color:#065F46; border-radius:8px;
-                       padding:8px; font-size:0.78rem; text-align:center;",
-            tags$strong("Citation phase"), br(),
-            tags$small("After Jan 2025")
-          )
-        ), 
-        
-        ## Interactive Filters
-        p(tags$strong("Filters")),
-        
-        layout_columns(
-          col_widths = c(3, 3, 3, 3),
-          gap = "1rem",
-          
-          selectInput(
-            inputId = "victim_type",
-            label = "Victim Filters",
-            choices = c("All Incidents", "Injuries", "Fatalities"),
-            selected = "All Incidents"
-          ),
-          
-          checkboxGroupInput(
-            inputId = "mode",
-            label = "Road User Type",
-            choices = c("Pedestrian", "Bicyclist"),
-            selected = c("Pedestrian", "Bicyclist")
-          ),
-          
-          selectInput(
-            inputId = "location_type",
-            label = "Location Filters",
-            choices = c("All", "Intersection", "Non-Intersection"),
-            selected = "All"
-          ),
-          
-          sliderInput(
-            inputId = "date_range",
-            label = "Date Filter",
-            min   = as.Date("2014-01-01"),
-            max   = as.Date("2025-12-31"),
-            value = c(as.Date("2014-01-01"), as.Date("2025-12-31")),
-            ticks = FALSE,
-            timeFormat = "%Y-%m",
-            dragRange = TRUE
-          )
-        ),
-        
-        # Visualization panels
-        navset_card_tab(
-          nav_panel(
-            "Graph",
-            plotlyOutput(outputId = "main_plot", height = "500px")
-          ),
-          nav_panel(
-            "Map",
-            leafletOutput("map", height = "500px")
-          ),
-          
-        )
-      )
-    )
-  ),
-  
-  nav_panel(
-    "Before/After Analysis",
-    layout_columns(
-      col_widths = c(6, 6),
-      gap = "1.2rem",
-      
-      div(
-        card(
-          card_header("A. Total Yearly Deaths of Pedestrians at Intersections in California"),
-          img(src = "yearly_ped_int_death.png", width = "100%")
-        ),
-        p("This figure shows a drastic decrease in the number of deaths of pedestrians at intersections from January 2024, when the law was enforced. It is also observed that the number of deaths continued to decline after January 2025, when enforcement moved from warning based to citation based."
-        )
-      ),
-      
-      div(
-        card(
-          card_header("B. Total Monthly Deaths of Pedestrians at Intersections in California"),
-          img(src = "monthly_ped_int_death.png", width = "100%")
-        ),
-        p(
-          "In the monthly trend, the total number of deaths fluctuates throughout each year due to seasonal changes, but overall, there is a sharp decrease from the start of 2014 to the end of 2025."  
-        )
-      )
-    )
-  ),
-  
-  nav_panel(
-    "Maps"
-  ),
-  nav_panel(
-    "Results"
-  ),
-  nav_panel(
-    "About Us"
-  ),
-  nav_spacer()
-)
-
-
-# Server
-server <- function(input, output, session) {
-  
-  
-  apply_filters <- function(data) {
-    
-    # Filter by victim type
-    if (input$victim_type == "Fatalities") {
-      data <- data %>%
-        filter(COUNT_PED_KILLED > 0 | COUNT_BICYCLIST_KILLED > 0)
-    } else if (input$victim_type == "Injuries") {
-      data <- data %>%
-        filter(COUNT_PED_INJURED > 0 | COUNT_BICYCLIST_INJURED > 0)
+     /* sidebar */
+    .app-sidebar {
+      width: 320px;
+      flex: 0 0 320px;
+      background: #FFFFFF;
+      border-right: 1px solid var(--brand-border);
+      display: flex;
+      flex-direction: column;
+      padding: 48px 32px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
     }
     
-    # Filter by road user
+    .sidebar-brand {
+      padding-bottom: 28px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--brand-border);
+    }
+    
+    
+    .brand-title { font-weight: 700; font-size: 1.2rem; color: var(--brand-navy); letter-spacing: -0.03em; line-height: 1.2; }
+    .brand-subtitle { font-size: 0.78rem; color: var(--brand-muted); margin-top: 8px; line-height: 1.4; font-family: 'Inter', sans-serif; font-weight: 400; }
+
+    .sidebar-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; }
+
+    .sidebar-nav-link {
+      display: block;
+      padding: 8px 12px;
+      margin-left: -12px;
+      border-radius: 4px;
+      color: var(--brand-muted) !important;
+      text-decoration: none !important;
+      font-size: 0.88rem;
+      font-family: monospace;
+      text-transform: lowercase;
+      transition: all .15s ease;
+    }
+    .sidebar-nav-link:hover { color: var(--brand-navy) !important; background-color: var(--brand-surface); }
+    .sidebar-nav-link.active {
+      color: var(--brand-navy) !important;
+      font-weight: 600;
+      background-color: var(--brand-highlight);
+    }
+
+    .app-main { flex: 1 1 auto; min-width: 0; padding: 56px 72px; position: relative; }
+
+    /* typographics */
+    .section-eyebrow {
+      text-transform: lowercase;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--brand-muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+    
+    .right-aligned-eyebrow {
+      text-align: right;
+      text-transform: lowercase;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--brand-muted);
+    }
+
+    .page-title { 
+      font-weight: 400; 
+      font-size: 2.4rem; 
+      color: var(--brand-navy); 
+      margin: 8px 0 36px 0;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    /*  Structured layout cards */
+    .document-card {
+      background: #FFFFFF;
+      border-top: 2px solid var(--brand-navy);
+      padding: 24px 0;
+      margin-bottom: 32px;
+    }
+    .document-card-title {
+      font-size: 0.82rem;
+      font-family: monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--brand-muted);
+      margin-bottom: 16px;
+    }
+    
+    .double-hr {
+      border-top: 3px double var(--brand-border);
+      margin: 40px 0 16px 0;
+    }
+
+
+    .register-container {
+      border: 1px solid var(--brand-border);
+      background: #FFFFFF;
+      margin-bottom: 24px;
+    }
+    .register-header {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--brand-border);
+      background: var(--brand-surface);
+      font-family: monospace;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--brand-muted);
+    }
+    .register-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--brand-border);
+      font-size: 0.88rem;
+    }
+    .register-row:last-child { border-bottom: none; }
+    .register-row .shiny-input-container { margin-bottom: 0 !important; padding-top: 0 !important; }
+    
+    .form-check-inline { margin-right: 12px; font-size: 0.85rem; }
+    .irs--headline .irs-bar { background: var(--brand-navy); }
+    
+    .map-workspace-container {
+      border: 1px solid var(--brand-border);
+      background: #FFFFFF;
+      overflow: hidden;
+    }
+    .map-legend-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: var(--brand-surface);
+      border-bottom: 1px solid var(--brand-border);
+      font-family: monospace;
+      font-size: 0.78rem;
+    }
+    
+    .text-link {
+      background-color: var(--brand-link);
+      padding: 0.05em 0.2em;
+      border-radius: 2px;
+    }
+
+    @media (max-width: 950px) {
+      .app-shell { flex-direction: column; }
+      .app-sidebar { width: 100%%; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--brand-border); padding: 24px; }
+      .sidebar-nav { flex-direction: row; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+      .sidebar-brand { margin-bottom: 0; padding-bottom: 12px; }
+      .app-main { padding: 32px 24px; }
+    }
+  ", brand$navy, brand$ink, brand$muted, brand$surface, brand$border, brand$highlight, brand$link, brand$accent))
+
+# Load data
+crossings_cal       <- readRDS(here("ShinyApp", "shiny-data", "OSM_california_crossings.rds"))
+ca_boundary         <- readRDS(here("ShinyApp", "shiny-data", "ca_boundary.rds"))
+bike_or_ped_acc_all <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_all.rds"))
+bike_or_ped_acc_sf  <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_geo.rds"))
+
+bike_or_ped_acc_all <- bike_or_ped_acc_all %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
+bike_or_ped_acc_sf  <- bike_or_ped_acc_sf  %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
+
+
+# ==========================================================================
+# Shared Input Component Layout
+# ==========================================================================
+filter_panel_register <- div(
+  div(class = "section-eyebrow", "crash filters"),
+  div(
+    class = "register-container",
+    div(class = "register-header", span("Filters"), span("argument context")),
+    div(
+      class = "register-row",
+      span("Victim Profile"),
+      selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
+    ),
+    div(
+      class = "register-row",
+      span("Road User Class"),
+      checkboxGroupInput(inputId = "mode", label = NULL, choices = c("Pedestrian", "Bicyclist"), selected = c("Pedestrian", "Bicyclist"), inline = TRUE)
+    ),
+    div(
+      class = "register-row",
+      span("Geographic Setting"),
+      selectInput(inputId = "location_type", label = NULL, choices = c("All", "Intersection", "Non-Intersection"), selected = "All", width = "160px")
+    ),
+    div(
+      class = "register-row",
+      span("Temporal Boundary"),
+      sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
+    )
+  )
+)
+
+
+# ==========================================================================
+# Page Views Setup --------------------------------------------------------
+# ==========================================================================
+
+overview_page <- div(
+  class = "page-content",
+  
+  layout_columns(
+    col_widths = c(12),
+    div(
+      h1(class = "page-title", "Impacts of Daylighting on Pedestrian and Bicyclist Safety")
+    )
+  ),
+  
+  layout_columns(
+    col_widths = c(6, 6),
+    gap = "3rem",
+    
+    # Left Narrative Column
+    div(
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "About the Law"),
+        p(
+          "On October 10, 2023, ",
+          tags$a(
+            href = "https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB413",
+            target = "_blank",
+            tags$span(
+              class = "text-link",
+              "California Assembly Bill 413 (AB 413)"
+            )
+          ),
+          " was signed into law. This legislation prohibits parking within 20 feet of the approach side of any marked or unmarked crosswalk at intersections. This safety practice, known across disciplines as ",
+          tags$em("daylighting"),
+          ", is intended to improve intersection visibility by removing obstructions that limit pedestrian and driver sightlines.",
+          
+          p("By expanding visibility at conflict points, this configuration produces three key outcomes:"),
+          
+          tags$ul(
+            style = "padding-left: 20px; color: var(--brand-ink); line-height: 1.7;",
+            tags$li("Improved sightlines at multi-modal intersections."),
+            tags$li("Increased driver awareness of pedestrians and bicyclists."),
+            tags$li("Reduced severity and frequency of pedestrian and bicyclist collisions.")
+          )
+        )
+      )
+    ),
+    
+    # Right Context Column
+    div(
+      div(
+        class = "register-container",
+        div(class = "register-header", span("IMPLEMENTATION TIMELINE")),
+        div(
+          class = "register-row",
+          tags$span("Pre-enforcement"),
+          tags$small("Before Jan 2024", style = "font-family: monospace; color: #991B1B; background: #FEE2E2; padding: 2px 8px; border-radius: 2px;")
+        ),
+        div(
+          class = "register-row",
+          tags$span("Warning Phase"),
+          tags$small("Jan 2024 - Dec 2024", style = "font-family: monospace; color: #92400E; background: #FEF3C7; padding: 2px 8px; border-radius: 2px;")
+        ),
+        div(
+          class = "register-row",
+          tags$span("Citation Phase"),
+          tags$small("After Jan 2025", style = "font-family: monospace; color: #065F46; background: #D1FAE5; padding: 2px 8px; border-radius: 2px;")
+        )
+      ),
+      img(
+        src = "SFA-Daylighting.jpg",
+        width = "100%",
+        style = "border: 1px solid var(--brand-border); opacity: 0.85; margin-top: 12px;"
+      )
+    )
+  ),
+  
+
+)
+
+literature_page <- div(
+  class = "page-content", 
+  div(class = "section-eyebrow", ""), 
+  h1(class = "page-title", "Literature"), 
+  style = "color: var(--brand-muted);")
+
+
+maps_page <- div(
+  class = "page-content",
+  h1(class = "page-title", "Crash Mapping"),
+  
+  layout_columns(
+    col_widths = c(4, 8),
+    gap = "2.5rem",
+    
+    # Left Configuration
+    div(
+      filter_panel_register,
+      
+      div(class = "section-eyebrow", "aggregation controls"),
+      div(
+        class = "register-container",
+        div(class = "register-header", span("Time Series"), span("Step")),
+        div(
+          class = "register-row",
+          span("Interval Scale"),
+          radioButtons("granularity", label = NULL, choices = c("Yearly" = "year", "Monthly" = "month"), selected = "year", inline = TRUE)
+        )
+      ),
+      uiOutput("range_warning")
+    ),
+    
+    # Right Layout
+    div(
+      div(
+        class = "map-workspace-container",
+        leafletOutput("map", height = "500px")
+      ),
+      
+      div(style = "margin-top: 36px;"),
+      div(
+        style = "border-top: 1px solid var(--brand-border); padding-top: 16px;",
+        plotlyOutput(outputId = "main_plot", height = "320px")
+      )
+    )
+  )
+)
+
+before_after_page <- div(
+  class = "page-content",
+  h1(class = "page-title", "Before/After Analysis"),
+  
+  layout_columns(
+    col_widths = c(6, 6),
+    gap = "2.5rem",
+    div(
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "A. Total Yearly Deaths of Pedestrians at Intersections in California"),
+        img(src = "yearly_ped_int_death.png", width = "100%", style = "border: 1px solid var(--brand-border);")
+      ),
+      p("This figure shows a drastic decrease in the number of deaths of pedestrians at intersections from January 2024, when the law was enforced. It is also observed that the number of deaths continued to decline after January 2025, when enforcement moved from warning based to citation based.", style = "font-size:0.9rem; line-height:1.55; color: var(--brand-ink);")
+    ),
+    div(
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "B. Total Monthly Deaths of Pedestrians at Intersections in California"),
+        img(src = "monthly_ped_int_death.png", width = "100%", style = "border: 1px solid var(--brand-border);")
+      ),
+      p("In the monthly trend, the total number of deaths fluctuates throughout each year due to seasonal changes, but overall, there is a sharp decrease from the start of 2014 to the end of 2025.", style = "font-size:0.9rem; line-height:1.55; color: var(--brand-ink);")
+    )
+  )
+)
+
+
+
+results_page <- div(
+  class = "page-content", 
+  h1(class = "page-title", "Results"), 
+  p("epic results", 
+    style = "color: var(--brand-muted);"))
+about_page   <- div(
+  class = "page-content", 
+  h1(class = "page-title", "About Us"), p("Pide Akana Techa Kyle Klemba", 
+                                          style = "color: var(--brand-muted);"))
+
+
+# ==========================================================================
+# UI Assembly Shell Configuration -----------------------------------------
+# ==========================================================================
+
+ui <- page_fluid(
+  theme = app_theme,
+  style = "padding: 0; max-width: none;",
+  tags$head(
+    tags$title("California Assembly Bill 413: Daylighting Law"),
+    tags$link(rel = "icon", href = "data:,")
+  ),
+  
+  useShinyjs(), 
+  
+  div(
+    class = "app-shell",
+    
+    tags$aside(
+      class = "app-sidebar",
+      div(
+        class = "sidebar-brand",
+        div("California Assembly Bill 413", class = "brand-title"),
+        div("Impacts of Daylighting Policy on Pedestrian and Bicyclist Safety", class = "brand-subtitle")
+      ),
+      tags$nav(
+        class = "sidebar-nav",
+        actionLink("nav_overview", "Overview", class = "sidebar-nav-link active"),
+        actionLink("nav_literature", "Literature", class = "sidebar-nav-link"),
+        actionLink("nav_maps", "Maps & Trends", class = "sidebar-nav-link"),
+        actionLink("nav_before_after", "Before/After Analysis", class = "sidebar-nav-link"),
+        actionLink("nav_results", "Results Log", class = "sidebar-nav-link"),
+        actionLink("nav_about", "About Us", class = "sidebar-nav-link")
+      )
+    ),
+    
+
+      tags$main(
+      class = "app-main",
+      
+      navset_hidden(
+        id = "main_nav",
+        nav_panel(title = "Overview",       value = "overview",     overview_page),
+        nav_panel(title = "Literature",       value = "literature", literature_page),
+        nav_panel(title = "Maps",           value = "maps",         maps_page),
+        nav_panel(title = "Before/After",   value = "before_after", before_after_page),
+        nav_panel(title = "Results",        value = "results",      results_page),
+        nav_panel(title = "About Us",       value = "about",        about_page)
+      )
+    )
+  )
+)
+
+
+# ==========================================================================
+# Server ------------------------------------------------------------------
+# ==========================================================================
+
+server <- function(input, output, session) {
+  
+  # Sidebar Class-Switching Engine
+  nav_map <- list(
+    "nav_overview" = "overview",
+    "nav_literature" = "literature",
+    "nav_maps" = "maps",
+    "nav_before_after" = "before_after",
+    "nav_results" = "results",
+    "nav_about" = "about"
+  )
+  
+  lapply(names(nav_map), function(link_id) {
+    observeEvent(input[[link_id]], {
+      for (id in names(nav_map)) {
+        if (id == link_id) {
+          shinyjs::addClass(id, "active")
+        } else {
+          shinyjs::removeClass(id, "active")
+        }
+      }
+      nav_select("main_nav", selected = nav_map[[link_id]], session = session)
+    })
+  })
+  
+  # Reactive Data Pipeline
+  apply_filters <- function(data) {
+    if (input$victim_type == "Fatalities") {
+      data <- data %>% filter(COUNT_PED_KILLED > 0 | COUNT_BICYCLIST_KILLED > 0)
+    } else if (input$victim_type == "Injuries") {
+      data <- data %>% filter(COUNT_PED_INJURED > 0 | COUNT_BICYCLIST_INJURED > 0)
+    }
+    
     if (!is.null(input$mode) && length(input$mode) > 0) {
       ped_selected <- "Pedestrian" %in% input$mode
       bic_selected <- "Bicyclist" %in% input$mode
       
       if (ped_selected && bic_selected) {
-        data <- data %>%
-          filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
-      } 
-      else if (ped_selected) {
-        # Only pedestrian selected
-        data <- data %>%
-          filter(PEDESTRIAN_ACCIDENT == "Y")
-      } 
-      else if (bic_selected) {
-        # Only bicyclist selected
-        data <- data %>%
-          filter(BICYCLE_ACCIDENT == "Y")
+        data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
+      } else if (ped_selected) {
+        data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y")
+      } else if (bic_selected) {
+        data <- data %>% filter(BICYCLE_ACCIDENT == "Y")
       }
     } else {
-      data <- data %>%
-        filter(FALSE)
+      data <- data %>% filter(FALSE)
     }
     
-    # Filter by location type
     if (input$location_type == "Intersection") {
-      data <- data %>%
-        filter(INTERSECTION == "Y")
+      data <- data %>% filter(INTERSECTION == "Y")
     } else if (input$location_type == "Non-Intersection") {
-      data <- data %>%
-        filter(INTERSECTION == "N")
+      data <- data %>% filter(INTERSECTION == "N")
     }
     
-    # Filter by date
     if (!is.na(input$date_range[1]) && !is.na(input$date_range[2])) {
-      data <- data %>%
-        filter(
-          !is.na(COLLISION_DATE),
-          COLLISION_DATE >= input$date_range[1],
-          COLLISION_DATE <= input$date_range[2]
-        )
+      data <- data %>% filter(!is.na(COLLISION_DATE), COLLISION_DATE >= input$date_range[1], COLLISION_DATE <= input$date_range[2])
     }
     
     return(data)
   }
   
-  # Reactive filtering for graph
-  filtered_data_graph <- reactive({
-    apply_filters(bike_or_ped_acc_all)
-  })
+  filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) })
+  filtered_data_map    <- reactive({ apply_filters(bike_or_ped_acc_sf) })
   
-  # Reactive filtering for map
-  filtered_data_map <- reactive({
-    apply_filters(bike_or_ped_acc_sf)
-  })
-  
-  # Reactive filtering coords for map
   filtered_coords <- reactive({
     data <- filtered_data_map()
-    
-    if (nrow(data) == 0) {
-      return(NULL)
-    }
-    
+    if (nrow(data) == 0) return(NULL)
     coords_matrix <- st_coordinates(data)
-    
-    data %>%
-      st_drop_geometry() %>%
-      mutate(
-        lng = coords_matrix[, 1],
-        lat = coords_matrix[, 2]
-      )
+    data %>% st_drop_geometry() %>% mutate(lng = coords_matrix[, 1], lat = coords_matrix[, 2])
   })
   
-  # Main plot output
-  output$main_plot <- renderPlotly({
+  output$range_warning <- renderUI({
+    req(input$granularity == "year")
+    start_partial <- format(as.Date(input$date_range[1]), "%m-%d") != "01-01"
+    end_partial   <- format(as.Date(input$date_range[2]), "%m-%d") != "12-31"
+    
+    if (start_partial || end_partial) {
+      div(
+        style = "font-family: monospace; font-size: 0.75rem; color: #7A5205; background: #FCF1DA; padding: 10px; margin-top: 12px; border: 1px solid #F5E0B7; border-radius:3px;",
+        "Incomplete year chosen. Output may reflect truncated annual aggregates."
+      )
+    } else { NULL }
+  })
+  
+
+    output$main_plot <- renderPlotly({
     data <- filtered_data_graph()  
     
     if (nrow(data) == 0) {
       plot_ly() %>%
         layout(
-          title = "No Data Matches Selected Filters",
-          xaxis = list(title = "Year"),
-          yaxis = list(title = "Count"),
-          annotations = list(
-            showarrow = FALSE,
-            xref = "paper",
-            yref = "paper",
-            x = 0.5,
-            y = 0.5,
-            font = list(size = 12)
-          )
+          xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
+          annotations = list(text = "No metrics matched selected arguments.", showarrow = FALSE, font = list(family = "monospace", size = 12, color = brand$muted))
         )
-    } 
-    else {
-      summary_data <- data %>%
-        {if ("geometry" %in% names(.)) st_drop_geometry(.) else .} %>%  
-        mutate(ACCIDENT_YEAR = lubridate::year(COLLISION_DATE)) %>%
-        filter(!is.na(ACCIDENT_YEAR)) %>%
-        group_by(ACCIDENT_YEAR) %>%
-        summarise(
-          Total_Accidents = n(),
-          Fatalities = sum(COUNT_PED_KILLED, na.rm = TRUE) + sum(COUNT_BICYCLIST_KILLED, na.rm = TRUE),
-          Injuries = sum(COUNT_PED_INJURED, na.rm = TRUE) + sum(COUNT_BICYCLIST_INJURED, na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        arrange(ACCIDENT_YEAR)
+    } else {
+      plot_data <- data %>% {if ("geometry" %in% names(.)) st_drop_geometry(.) else .} %>% filter(!is.na(COLLISION_DATE))
       
-      if (nrow(summary_data) == 0) {
-        plot_ly() %>%
-          layout(
-            title = "Unable to process data - check date format",
-            annotations = list(
-              showarrow = FALSE,
-              xref = "paper",
-              yref = "paper",
-              x = 0.5,
-              y = 0.5
-            )
-          )
-      } 
-      else {
-        plot_ly(data = summary_data, x = ~ACCIDENT_YEAR) %>%
-          add_trace(
-            y = ~Total_Accidents, 
-            type = "bar", 
-            name = "Total Accidents",
-            marker = list(color = "steelblue")
-          ) %>%
-          layout(
-            title = paste("Accident Data Summary by Year"),
-            xaxis = list(title = "Year"),
-            yaxis = list(title = "Total"),
-            hovermode = "x unified",
-            plot_bgcolor = "rgba(240,240,240,0.5)"
-          )
+      if (input$granularity == "year") {
+        summary_data <- plot_data %>%
+          mutate(ACCIDENT_PERIOD = lubridate::year(COLLISION_DATE)) %>%
+          group_by(ACCIDENT_PERIOD) %>%
+          summarise(Total_Accidents = n(), .groups = "drop") %>%
+          arrange(ACCIDENT_PERIOD)
+        x_title <- "year"
+      } else {
+        summary_data <- plot_data %>%
+          mutate(ACCIDENT_PERIOD = lubridate::floor_date(COLLISION_DATE, "month")) %>%
+          group_by(ACCIDENT_PERIOD) %>%
+          summarise(Total_Accidents = n(), .groups = "drop") %>%
+          arrange(ACCIDENT_PERIOD)
+        x_title <- "month"
       }
+      
+      plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD) %>%
+        add_trace(
+          y = ~Total_Accidents, 
+          type = "bar", 
+          name = "Incidents", 
+          marker = list(color = brand$muted, line = list(color = "white", width = 0.5)),
+          hoverinfo = "text",
+          text = ~paste0("Period: ", ACCIDENT_PERIOD, "<br>Incidents: ", Total_Accidents)
+        ) %>%
+        layout(
+          margin = list(t = 10, b = 40, l = 40, r = 10),
+          xaxis = list(title = x_title, showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+          yaxis = list(title = "incident count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+          hovermode = "x unified",
+          plot_bgcolor  = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)"
+        )
     }
   })
   
-  # Map output
-  output$map <- renderLeaflet({
-    data <- filtered_data_map()  # CHANGED: explicitly using map dataset
-    coords <- filtered_coords()
-    
-    # Base map
-    map <- leaflet(
-      options = leafletOptions(
-        attributionControl = FALSE
-      )
-    ) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
-      addPolygons(
-        data = ca_boundary,
-        fillColor = "lightgreen",
-        fillOpacity = 0.2,
-        color = "black",
-        weight = 2,
-        group = "California"
-      ) %>%
-      addGlPoints(
-        data = crossings_cal,
-        group = "Crossings",
-        opacity = 0.3,
-        radius = 6,
-        fillColor = "black"
-      )
-    
-    if (!is.null(coords) && nrow(coords) > 0) {
-      map <- map %>%
-        addHeatmap(
-          data = coords,
-          lng = ~lng,
-          lat = ~lat,
-          blur = 20,
-          max = 0.05,
-          radius = 15,
-          gradient = c(
-            "0.0" = "blue",
-            "0.3" = "cyan",
-            "0.6" = "yellow",
-            "0.8" = "orange",
-            "1.0" = "red"
-          ),
-          group = "Accident Heatmap"
+    # Base map — render ONCE, no reactive dependency on filters
+    output$map <- renderLeaflet({
+      leaflet(options = leafletOptions(attributionControl = FALSE)) %>%
+        addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
+        addPolygons(
+          data = ca_boundary,
+          fillColor = "transparent", color = brand$ink,
+          weight = 1.2, opacity = 0.4, group = "California"
         ) %>%
-        addCircleMarkers(
-          data = coords,
-          lng = ~lng,
-          lat = ~lat,
-          radius = 3,
-          stroke = FALSE,
-          fillOpacity = 0.6,
-          group = "Accident Clusters",
-          clusterOptions = markerClusterOptions()
-        )
-    }
+        addLayersControl(
+          overlayGroups = c("California", "Accident Heatmap", "Accident Clusters"),
+          options = layersControlOptions(collapsed = TRUE)
+        ) %>%
+        hideGroup("Accident Clusters")
+    })
     
-    map %>%
-      addLayersControl(
-        overlayGroups = c(
-          "California",
-          "Crossings",
-          "Accident Heatmap",
-          "Accident Clusters"
-        ),
-        options = layersControlOptions(
-          collapsed = FALSE
-        )
-      )
-  })
+    # Updates — driven by filters, patch the existing map via proxy
+    observe({
+      coords <- filtered_coords()
+      proxy <- leafletProxy("map") %>%
+        clearHeatmap() %>%
+        clearMarkerClusters() %>%
+        clearGroup("Accident Heatmap") %>%
+        clearGroup("Accident Clusters")
+      
+      if (!is.null(coords) && nrow(coords) > 0) {
+        proxy %>%
+          addHeatmap(
+            data = coords, lng = ~lng, lat = ~lat,
+            blur = 22, max = 0.04, radius = 11,
+            gradient = c("0.4" = "#64748B", "0.65" = "#1C2541", "0.85" = "#0A1128", "1.0" = "#DC2626"),
+            group = "Accident Heatmap"
+          ) %>%
+          addCircleMarkers(
+            data = coords, lng = ~lng, lat = ~lat,
+            radius = 3, stroke = TRUE, color = "white", weight = 0.5,
+            fillColor = brand$navy, fillOpacity = 0.4,
+            group = "Accident Clusters",
+            clusterOptions = markerClusterOptions()
+          )
+      }
+    })
 }
 
 # Run the app
