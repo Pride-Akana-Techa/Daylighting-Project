@@ -18,7 +18,6 @@ library(htmlwidgets)
 library(leafgl)
 library(leaflet.extras)
 
-
 # Palette
 brand <- list(
   navy       = "#0A1128",   # text headings / rules
@@ -63,7 +62,7 @@ app_theme <- bs_theme(
     .app-sidebar {
       width: 320px;
       flex: 0 0 320px;
-      background: #FFFFFF;
+      background: #1E2A47;
       border-right: 1px solid var(--brand-border);
       display: flex;
       flex-direction: column;
@@ -80,7 +79,7 @@ app_theme <- bs_theme(
     }
     
     
-    .brand-title { font-weight: 700; font-size: 1.2rem; color: var(--brand-navy); letter-spacing: -0.03em; line-height: 1.2; }
+    .brand-title { font-weight: 700; font-size: 1.2rem; color: #F1F4F9; letter-spacing: -0.03em; line-height: 1.2; }
     .brand-subtitle { font-size: 0.78rem; color: var(--brand-muted); margin-top: 8px; line-height: 1.4; font-family: 'Inter', sans-serif; font-weight: 400; }
 
     .sidebar-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; }
@@ -206,6 +205,72 @@ app_theme <- bs_theme(
       padding: 0.05em 0.2em;
       border-radius: 2px;
     }
+    
+      /* Literature review content (pulled in from Word doc via pandoc) */
+    .lit-content h1, .lit-content h2, .lit-content h3 {
+      font-family: 'Playfair Display', serif;
+      color: var(--brand-navy);
+      margin-top: 28px;
+    }
+    .lit-content p {
+      color: var(--brand-ink);
+      line-height: 1.7;
+      font-size: 0.92rem;
+    }
+    .lit-content ul, .lit-content ol {
+      padding-left: 20px;
+      color: var(--brand-ink);
+      line-height: 1.7;
+    }
+    .lit-content blockquote {
+      border-left: 3px solid var(--brand-border);
+      padding-left: 16px;
+      color: var(--brand-muted);
+      font-style: italic;
+    }
+    
+    /* Variable definition tables */
+.var-table-wrap {
+  margin-top: 20px;
+  border-top: 1px solid var(--brand-border);
+  border-bottom: 1px solid var(--brand-border);
+}
+.var-table {
+  width: 100%%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.var-table thead th {
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--brand-ink);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--brand-border);
+}
+.var-table tbody td {
+  padding: 12px 16px;
+  vertical-align: top;
+  color: var(--brand-ink);
+  border-bottom: 1px solid var(--brand-highlight);
+}
+.var-table tbody tr:nth-child(odd) {
+  background-color: var(--brand-surface);
+}
+.var-table .var-name {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  white-space: nowrap;
+  color: var(--brand-navy);
+}
+.var-table .var-role {
+  color: var(--brand-muted);
+  font-family: monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 
     @media (max-width: 950px) {
       .app-shell { flex-direction: column; }
@@ -216,7 +281,10 @@ app_theme <- bs_theme(
     }
   ", brand$navy, brand$ink, brand$muted, brand$surface, brand$border, brand$highlight, brand$link, brand$accent))
 
-# Load data
+
+# Load Data ---------------------------------------------------------------
+
+# Load all data needed
 crossings_cal       <- readRDS(here("ShinyApp", "shiny-data", "OSM_california_crossings.rds"))
 ca_boundary         <- readRDS(here("ShinyApp", "shiny-data", "ca_boundary.rds"))
 bike_or_ped_acc_all <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_all.rds"))
@@ -224,6 +292,13 @@ bike_or_ped_acc_sf  <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_geo
 
 bike_or_ped_acc_all <- bike_or_ped_acc_all %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
 bike_or_ped_acc_sf  <- bike_or_ped_acc_sf  %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
+
+# Convert Word doc to HTML
+rmarkdown::pandoc_convert(
+  input  = here("ShinyApp", "shiny-data", "literature_review.docx"),
+  to     = "html",
+  output = here("ShinyApp", "www", "literature_review.html")
+)
 
 
 # ==========================================================================
@@ -340,10 +415,14 @@ overview_page <- div(
 )
 
 literature_page <- div(
-  class = "page-content", 
-  div(class = "section-eyebrow", ""), 
-  h1(class = "page-title", "Literature"), 
-  style = "color: var(--brand-muted);")
+  class = "page-content",
+  div(class = "section-eyebrow", "research context"),
+  h1(class = "page-title", "Literature"),
+  div(
+    class = "document-card lit-content",
+    includeHTML("www/literature_review.html")
+  )
+)
 
 
 maps_page <- div(
@@ -387,28 +466,96 @@ maps_page <- div(
   )
 )
 
-before_after_page <- div(
+methodology_page <- div(
   class = "page-content",
-  h1(class = "page-title", "Before/After Analysis"),
+  h1(class = "page-title", "Methodology"),
   
-  layout_columns(
-    col_widths = c(6, 6),
-    gap = "2.5rem",
-    div(
+  navset_tab(
+    id = "methodology_tabs",
+    
+    nav_panel(
+      title = "RDiT Model",
+      value = "rdit",
       div(
         class = "document-card",
-        div(class = "document-card-title", "A. Total Yearly Deaths of Pedestrians at Intersections in California"),
-        img(src = "yearly_ped_int_death.png", width = "100%", style = "border: 1px solid var(--brand-border);")
-      ),
-      p("This figure shows a drastic decrease in the number of deaths of pedestrians at intersections from January 2024, when the law was enforced. It is also observed that the number of deaths continued to decline after January 2025, when enforcement moved from warning based to citation based.", style = "font-size:0.9rem; line-height:1.55; color: var(--brand-ink);")
+        div(class = "document-card-title", "Regression Discontinuity in Time"),
+        p(
+          "To estimate the causal effect of the enforcement AB 413 on crash frequency, we implement a sharp Regression Discontinuity in Time (RDiT) design using the ",
+          tags$code("rdrobust"), " package. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with the each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        ),
+        div(
+          style = "padding: 16px 0; text-align: center; font-size: 1.05rem;",
+          "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
+        ),
+        
+        div(class = "document-card-title", "Variable Definitions"),
+        div(
+          class = "var-table-wrap",
+          tags$table(
+            class = "var-table",
+            tags$thead(
+              tags$tr(
+                tags$th("Variable"),
+                tags$th("Description"),
+                tags$th("Role in Analysis")
+              )
+            ),
+            tags$tbody(
+              tags$tr(
+                tags$td(class = "var-name", HTML("Y<sub>t</sub>")),
+                tags$td("Crash count (pedestrian/bicyclist collisions) at time t."),
+                tags$td(class = "var-role", "Dependent Variable")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("D<sub>t</sub>")),
+                tags$td("Indicator equal to 1 for periods after the enforcement cutoff."),
+                tags$td(class = "var-role", "Key Independent Variable")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("t &minus; t<sub>0</sub>")),
+                tags$td("Running variable: time elapsed relative to the cutoff date."),
+                tags$td(class = "var-role", "Running Variable")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("&beta;<sub>1</sub>, &beta;<sub>2</sub>")),
+                tags$td("Slope terms allowing pre- and post-cutoff trends to differ."),
+                tags$td(class = "var-role", "Control")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", "Season_t"),
+                tags$td("Categorical control for season, capturing seasonal variation in crash frequency."),
+                tags$td(class = "var-role", "Control")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("h")),
+                tags$td("Bandwidth defining the estimation window around the cutoff, selected via MSE-optimal procedure."),
+                tags$td(class = "var-role", "Tuning Parameter")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("&tau;")),
+                tags$td("Estimated treatment effect at the cutoff, the coefficient of interest."),
+                tags$td(class = "var-role", "Coefficient of Interest")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("&epsilon;<sub>t</sub>")),
+                tags$td("Idiosyncratic error term."),
+                tags$td(class = "var-role", "Error Term")
+              )
+            )
+          )
+        )
+      )
     ),
-    div(
+    
+    nav_panel(
+      title = "Tobit Model (Grid Analysis)",
+      value = "tobit",
       div(
         class = "document-card",
-        div(class = "document-card-title", "B. Total Monthly Deaths of Pedestrians at Intersections in California"),
-        img(src = "monthly_ped_int_death.png", width = "100%", style = "border: 1px solid var(--brand-border);")
-      ),
-      p("In the monthly trend, the total number of deaths fluctuates throughout each year due to seasonal changes, but overall, there is a sharp decrease from the start of 2014 to the end of 2025.", style = "font-size:0.9rem; line-height:1.55; color: var(--brand-ink);")
+        div(class = "document-card-title", "Tobit Model for Spatial Grid Analysis"),
+        p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
+      )
     )
   )
 )
@@ -435,7 +582,8 @@ ui <- page_fluid(
   style = "padding: 0; max-width: none;",
   tags$head(
     tags$title("California Assembly Bill 413: Daylighting Law"),
-    tags$link(rel = "icon", href = "data:,")
+    tags$link(rel = "icon", href = "data:,"),
+    tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js")
   ),
   
   useShinyjs(), 
@@ -455,7 +603,7 @@ ui <- page_fluid(
         actionLink("nav_overview", "Overview", class = "sidebar-nav-link active"),
         actionLink("nav_literature", "Literature", class = "sidebar-nav-link"),
         actionLink("nav_maps", "Maps & Trends", class = "sidebar-nav-link"),
-        actionLink("nav_before_after", "Before/After Analysis", class = "sidebar-nav-link"),
+        actionLink("nav_methodology", "Methodology", class = "sidebar-nav-link"),
         actionLink("nav_results", "Results Log", class = "sidebar-nav-link"),
         actionLink("nav_about", "About Us", class = "sidebar-nav-link")
       )
@@ -470,7 +618,7 @@ ui <- page_fluid(
         nav_panel(title = "Overview",       value = "overview",     overview_page),
         nav_panel(title = "Literature",       value = "literature", literature_page),
         nav_panel(title = "Maps",           value = "maps",         maps_page),
-        nav_panel(title = "Before/After",   value = "before_after", before_after_page),
+        nav_panel(title = "Methodology",   value = "methodology", methodology_page),
         nav_panel(title = "Results",        value = "results",      results_page),
         nav_panel(title = "About Us",       value = "about",        about_page)
       )
@@ -490,7 +638,7 @@ server <- function(input, output, session) {
     "nav_overview" = "overview",
     "nav_literature" = "literature",
     "nav_maps" = "maps",
-    "nav_before_after" = "before_after",
+    "nav_methodology" = "methodology",
     "nav_results" = "results",
     "nav_about" = "about"
   )
