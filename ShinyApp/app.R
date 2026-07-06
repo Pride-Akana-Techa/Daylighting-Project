@@ -18,6 +18,7 @@ library(htmlwidgets)
 library(leafgl)
 library(leaflet.extras)
 
+
 # Palette
 brand <- list(
   navy       = "#0A1128",   # text headings / rules
