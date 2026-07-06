@@ -17,7 +17,7 @@ library(sf)
 tims_crashes <- readRDS("initial-analysis/scripts/TIMS_Filtered.rds")
 ccrs_crashes <- read_csv("initial-analysis/scripts/updated-crashes.csv")
 
-# remove duplicate rows 
+# remove duplicate rows (YW: still have duplicates?)
 ccrs_crashes <- ccrs_crashes |> distinct()
 
 # Convert county codes to county names

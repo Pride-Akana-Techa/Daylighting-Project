@@ -201,3 +201,4 @@ updated_crashes |>
     geom_col()
   class(updated_crashes$Year)
   
+  

@@ -1,6 +1,14 @@
 # -------------------------------------------------------------------------
 # 02_TIMS_aggregating_data
-# Code contains different graph outputs and aggregations for TIMS data 
+
+# Purpose : Aggregate cleaned TIMS crash data and produce exploratory plots of
+#           pedestrian (and bicyclist) fatalities over time, by month, and by
+#           day of week, around California's daylighting policy (warning period
+#           from 2024-01-01, enforcement from 2025-01-01).
+#
+# Input   : initial-analysis/data-clean/01_TIMS_Cleaned.rds   (from 01_TIMS_Cleaning)
+# Output  : exploratory ggplot figures (not written to disk)
+
 # -------------------------------------------------------------------------
 # load libraries
 
@@ -74,7 +82,7 @@ daily_data <- cal_filt |>
 
 
 # -------------------------------------------------------------------------
-# deaths by month for all years
+# Monthly pedestrian deaths over time (2014–2026), with policy period markers
 ggplot(daily_data, aes(x = day, y = ped_killed)) +
   stat_summary(
     aes(x = floor_date(day, "month")),
@@ -100,7 +108,7 @@ ggplot(daily_data, aes(x = day, y = ped_killed)) +
   theme_minimal()
 
 # -------------------------------------------------------------------------
-# deaths by month by year 
+# Seasonal pattern: monthly pedestrian deaths, one line per year
 monthly_data <- cal_filt %>%
   mutate(
     dummy_date = as.Date(paste0("3000-", month(COLLISION_DATE), "-01"))) |>
@@ -121,7 +129,7 @@ ggplot(monthly_data, aes(x = dummy_date, y = ped_killed, group = ACCIDENT_YEAR, 
 
 
 # -------------------------------------------------------------------------
-# deaths by day of week by year 
+# Pedestrian deaths by day of week, one series per year
 dow_data <- cal_filt %>%
   group_by(ACCIDENT_YEAR, day_of_week = DAY_OF_WEEK) %>%
   summarize(
