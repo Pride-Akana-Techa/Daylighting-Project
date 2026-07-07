@@ -10,7 +10,11 @@ library(readr)
 library(sf)
 library(tidyr)
 library(here)
+library(tidygeocoder)
+library(dplyr)
+library(readxl)
 
+# -------------------------------------------------------------------------
 # data too big to upload to github but from sangis
 roads <- read.csv(here("initial-analysis", "data-raw","Roads_All.csv"))
 
@@ -105,3 +109,28 @@ intersections_sf <- st_as_sf(
 )
 
 st_write(intersections_sf, here("initial-analysis","data-clean","SD_intersections.geojson"), delete_dsn = TRUE)
+
+
+
+
+# -------------------------------------------------------------------------
+# Geocoding San Diego department of transportation intersection
+# daylighting database 
+
+
+# Because they are intersections, the addresses given are two cross streets
+sd_daylit_intersections <- read_excel(
+  here("initial-analysis", "data-clean", "san_diego_daylight_intersections.xlsx")) |>
+  mutate(INTERSECTION = paste0(`CROSS STREET 1`,
+                               " and ", `CROSS STREET 2`,
+                               ", San Diego, CA ", `ZIP CODE`)
+  )
+
+sd_daylit_int_data <- sd_daylit_intersections |>
+  geocode(
+    address = INTERSECTION, 
+    method = "arcgis",
+    lat = Latitude,       
+    long = Longitude      
+  )
+saveRDS(sd_daylit_int_data, here("initial-analysis","data-clean","sd_daylit_int_data.rds"))
