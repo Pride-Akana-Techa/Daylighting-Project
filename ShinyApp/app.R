@@ -285,20 +285,22 @@ app_theme <- bs_theme(
 # Load Data ---------------------------------------------------------------
 
 # Load all data needed
-crossings_cal       <- readRDS(here("ShinyApp", "shiny-data", "OSM_california_crossings.rds"))
-ca_boundary         <- readRDS(here("ShinyApp", "shiny-data", "ca_boundary.rds"))
-bike_or_ped_acc_all <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_all.rds"))
-bike_or_ped_acc_sf  <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_geo.rds"))
+crossings_cal <- readRDS("shiny-data/OSM_california_crossings.rds")
+ca_boundary   <- readRDS("shiny-data/ca_boundary.rds")
+bike_or_ped_acc_all <- readRDS("shiny-data/TIMS_bike_ped_all.rds")
+bike_or_ped_acc_sf  <- readRDS("shiny-data/TIMS_bike_ped_geo.rds")
 
 bike_or_ped_acc_all <- bike_or_ped_acc_all %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
 bike_or_ped_acc_sf  <- bike_or_ped_acc_sf  %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
 
-# Convert Word doc to HTML
-rmarkdown::pandoc_convert(
-  input  = here("ShinyApp", "shiny-data", "literature_review.docx"),
-  to     = "html",
-  output = here("ShinyApp", "www", "literature_review.html")
-)
+
+# Convert word to HTML
+docx_path <- normalizePath("shiny-data/literature_review.docx", mustWork = TRUE)
+
+if (!dir.exists("www")) dir.create("www")
+html_path <- file.path(normalizePath("www", mustWork = TRUE), "literature_review.html")
+
+includeHTML("www/literature_review.html")
 
 
 # ==========================================================================
@@ -409,7 +411,7 @@ overview_page <- div(
         style = "border: 1px solid var(--brand-border); opacity: 0.85; margin-top: 12px;"
       )
     )
-  ),
+  )
   
 
 )
