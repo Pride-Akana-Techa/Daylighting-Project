@@ -657,7 +657,7 @@ ui <- page_fluid(
         actionLink("nav_literature", "Literature", class = "sidebar-nav-link"),
         actionLink("nav_maps", "Maps & Trends", class = "sidebar-nav-link"),
         actionLink("nav_methodology", "Methodology", class = "sidebar-nav-link"),
-        actionLink("nav_results", "Results Log", class = "sidebar-nav-link"),
+        actionLink("nav_results", "Results", class = "sidebar-nav-link"),
         actionLink("nav_about", "About Us", class = "sidebar-nav-link")
       )
     ),
