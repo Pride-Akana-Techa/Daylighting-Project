@@ -3,7 +3,6 @@
 # ==========================================================================
 
 # Libraries
-
 library(shiny)
 library(shinyjs)
 library(plotly)
@@ -284,15 +283,30 @@ app_theme <- bs_theme(
 
 # Load Data ---------------------------------------------------------------
 
-# Load all data needed
-crossings_cal <- readRDS("shiny-data/OSM_california_crossings.rds")
 ca_boundary   <- readRDS("shiny-data/ca_boundary.rds")
 bike_or_ped_acc_all <- readRDS("shiny-data/TIMS_bike_ped_all.rds")
 bike_or_ped_acc_sf  <- readRDS("shiny-data/TIMS_bike_ped_geo.rds")
 
-bike_or_ped_acc_all <- bike_or_ped_acc_all %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
-bike_or_ped_acc_sf  <- bike_or_ped_acc_sf  %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
+bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
+  st_transform(4326)
 
+bike_or_ped_acc_all <- bike_or_ped_acc_all %>%
+  mutate(
+    COLLISION_DATE = as.Date(COLLISION_DATE),
+    year  = lubridate::year(COLLISION_DATE),
+    month = lubridate::floor_date(COLLISION_DATE, "month")
+  )
+
+map_coords <- st_coordinates(bike_or_ped_acc_sf)
+bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
+  st_drop_geometry() %>%
+  mutate(
+    COLLISION_DATE = as.Date(COLLISION_DATE),
+    lng = map_coords[, 1],
+    lat = map_coords[, 2],
+    year  = lubridate::year(COLLISION_DATE),
+    month = lubridate::floor_date(COLLISION_DATE, "month")
+  )
 
 # Convert word to HTML
 docx_path <- normalizePath("shiny-data/literature_review.docx", mustWork = TRUE)
@@ -310,10 +324,10 @@ filter_panel_register <- div(
   div(class = "section-eyebrow", "crash filters"),
   div(
     class = "register-container",
-    div(class = "register-header", span("Filters"), span("argument context")),
+    div(class = "register-header", span("Map & Graph Controls")),
     div(
       class = "register-row",
-      span("Victim Profile"),
+      span("Incident Severity"),
       selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
     ),
     div(
@@ -323,12 +337,12 @@ filter_panel_register <- div(
     ),
     div(
       class = "register-row",
-      span("Geographic Setting"),
+      span("Crash Location"),
       selectInput(inputId = "location_type", label = NULL, choices = c("All", "Intersection", "Non-Intersection"), selected = "All", width = "160px")
     ),
     div(
       class = "register-row",
-      span("Temporal Boundary"),
+      span("Time Frame"),
       sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
     )
   )
@@ -418,7 +432,6 @@ overview_page <- div(
 
 literature_page <- div(
   class = "page-content",
-  div(class = "section-eyebrow", "research context"),
   h1(class = "page-title", "Literature"),
   div(
     class = "document-card lit-content",
@@ -437,18 +450,56 @@ maps_page <- div(
     
     # Left Configuration
     div(
-      filter_panel_register,
+      filter_panel_register <- div(
+        div(class = "section-eyebrow", "crash filters"),
+        div(
+          class = "register-container",
+          div(class = "register-header", span("Map & Graph Controls")),
+          div(
+            class = "register-row",
+            span("Incident Severity"),
+            selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
+          ),
+          div(
+            class = "register-row",
+            span("Worst Injury Severity"),
+            selectInput(inputId = "collision_severity", label = NULL, choices = "All", selected = "All", width = "160px")
+          ),
+          div(
+            class = "register-row",
+            span("Road User Class"),
+            checkboxGroupInput(inputId = "mode", label = NULL, choices = c("Pedestrian", "Bicyclist"), selected = c("Pedestrian", "Bicyclist"), inline = TRUE)
+          ),
+          div(
+            class = "register-row",
+            span("Crash Location"),
+            selectInput(inputId = "location_type", label = NULL, choices = c("All", "Intersection", "Non-Intersection"), selected = "All", width = "160px")
+          ),
+          
+          div(
+            class = "register-row",
+            span("County"),
+            selectInput(inputId = "county", label = NULL, choices = "All", selected = "All", width = "160px")
+          ),
+          div(
+            class = "register-row",
+            span("Time Frame"),
+            sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
+          )
+        )
       
+      ),
       div(class = "section-eyebrow", "aggregation controls"),
       div(
         class = "register-container",
-        div(class = "register-header", span("Time Series"), span("Step")),
+        div(class = "register-header", span("Graph Controls")),
         div(
           class = "register-row",
-          span("Interval Scale"),
+          span("Interval"),
           radioButtons("granularity", label = NULL, choices = c("Yearly" = "year", "Monthly" = "month"), selected = "year", inline = TRUE)
         )
       ),
+      uiOutput("cluster_warning"),
       uiOutput("range_warning")
     ),
     
@@ -635,7 +686,7 @@ ui <- page_fluid(
 
 server <- function(input, output, session) {
   
-  # Sidebar Class-Switching Engine
+  # Sidebar
   nav_map <- list(
     "nav_overview" = "overview",
     "nav_literature" = "literature",
@@ -658,7 +709,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Reactive Data Pipeline
   apply_filters <- function(data) {
     if (input$victim_type == "Fatalities") {
       data <- data %>% filter(COUNT_PED_KILLED > 0 | COUNT_BICYCLIST_KILLED > 0)
@@ -669,7 +719,6 @@ server <- function(input, output, session) {
     if (!is.null(input$mode) && length(input$mode) > 0) {
       ped_selected <- "Pedestrian" %in% input$mode
       bic_selected <- "Bicyclist" %in% input$mode
-      
       if (ped_selected && bic_selected) {
         data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
       } else if (ped_selected) {
@@ -687,21 +736,43 @@ server <- function(input, output, session) {
       data <- data %>% filter(INTERSECTION == "N")
     }
     
-    if (!is.na(input$date_range[1]) && !is.na(input$date_range[2])) {
-      data <- data %>% filter(!is.na(COLLISION_DATE), COLLISION_DATE >= input$date_range[1], COLLISION_DATE <= input$date_range[2])
+    if (!is.null(input$collision_severity) && input$collision_severity != "All") {
+      data <- data %>% filter(COLLISION_SEVERITY == input$collision_severity)
+    }
+    
+    if (!is.null(input$county) && input$county != "All") {
+      data <- data %>% filter(COUNTY == input$county)
+    }
+    
+    dr <- date_range_debounced()
+    if (!is.null(dr) && !is.na(dr[1]) && !is.na(dr[2])) {
+      data <- data %>% filter(!is.na(COLLISION_DATE), COLLISION_DATE >= dr[1], COLLISION_DATE <= dr[2])
     }
     
     return(data)
   }
   
-  filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) })
-  filtered_data_map    <- reactive({ apply_filters(bike_or_ped_acc_sf) })
+  # add debounce to slider so dragging doesn't fire a filter instantly
+  date_range_debounced <- reactive({ input$date_range }) %>% debounce(400)
   
-  filtered_coords <- reactive({
+  filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) }) %>%
+    bindCache(input$victim_type, input$mode, input$location_type,
+              input$collision_severity, input$county, date_range_debounced())
+  
+  filtered_data_map <- reactive({ apply_filters(bike_or_ped_acc_sf) }) %>%
+    bindCache(input$victim_type, input$mode, input$location_type,
+              input$collision_severity, input$county, date_range_debounced())
+
+  output$cluster_warning <- renderUI({
     data <- filtered_data_map()
-    if (nrow(data) == 0) return(NULL)
-    coords_matrix <- st_coordinates(data)
-    data %>% st_drop_geometry() %>% mutate(lng = coords_matrix[, 1], lat = coords_matrix[, 2])
+    req(nrow(data) > 50000)
+    
+    div(
+      style = "font-family: monospace; font-size: 0.75rem; color: #7A5205; background: #FCF1DA; padding: 10px; margin-top: 12px; border: 1px solid #F5E0B7; border-radius:3px;",
+      "Clusters only display below 50,000 points. Current selection is ",
+      scales::comma(nrow(data)),
+      " points."
+    )
   })
   
   output$range_warning <- renderUI({
@@ -728,19 +799,17 @@ server <- function(input, output, session) {
           annotations = list(text = "No metrics matched selected arguments.", showarrow = FALSE, font = list(family = "monospace", size = 12, color = brand$muted))
         )
     } else {
-      plot_data <- data %>% {if ("geometry" %in% names(.)) st_drop_geometry(.) else .} %>% filter(!is.na(COLLISION_DATE))
+      plot_data <- data %>% filter(!is.na(COLLISION_DATE))  # no more st_drop_geometry needed 
       
       if (input$granularity == "year") {
         summary_data <- plot_data %>%
-          mutate(ACCIDENT_PERIOD = lubridate::year(COLLISION_DATE)) %>%
-          group_by(ACCIDENT_PERIOD) %>%
+          group_by(ACCIDENT_PERIOD = year) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
           arrange(ACCIDENT_PERIOD)
         x_title <- "year"
       } else {
         summary_data <- plot_data %>%
-          mutate(ACCIDENT_PERIOD = lubridate::floor_date(COLLISION_DATE, "month")) %>%
-          group_by(ACCIDENT_PERIOD) %>%
+          group_by(ACCIDENT_PERIOD = month) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
           arrange(ACCIDENT_PERIOD)
         x_title <- "month"
@@ -750,62 +819,100 @@ server <- function(input, output, session) {
         add_trace(
           y = ~Total_Accidents, 
           type = "bar", 
-          name = "Incidents", 
-          marker = list(color = brand$muted, line = list(color = "white", width = 0.5)),
-          hoverinfo = "text",
-          text = ~paste0("Period: ", ACCIDENT_PERIOD, "<br>Incidents: ", Total_Accidents)
+          name = "Incidents",
+          marker = list(color = brand$muted)
         ) %>%
         layout(
           margin = list(t = 10, b = 40, l = 40, r = 10),
           xaxis = list(title = x_title, showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
           yaxis = list(title = "incident count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
-          hovermode = "x unified",
           plot_bgcolor  = "rgba(0,0,0,0)",
           paper_bgcolor = "rgba(0,0,0,0)"
         )
     }
   })
   
-    # Base map — render ONCE, no reactive dependency on filters
     output$map <- renderLeaflet({
       leaflet(options = leafletOptions(attributionControl = FALSE)) %>%
         addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
         addPolygons(
           data = ca_boundary,
           fillColor = "transparent", color = brand$ink,
-          weight = 1.2, opacity = 0.4, group = "California"
+          weight = 1.2, opacity = 0.4
         ) %>%
         addLayersControl(
-          overlayGroups = c("California", "Accident Heatmap", "Accident Clusters"),
+          overlayGroups = c("Accident Heatmap", "Accident Clusters"),
           options = layersControlOptions(collapsed = TRUE)
-        ) %>%
-        hideGroup("Accident Clusters")
+        )
+    })
+    severity_labels <- c(
+      "Fatal Injury" = "1",
+      "Serious Injury" = "2",
+      "Minor Injury" = "3",
+      "Complaint of Pain" = "4"
+    )
+    observe({
+      updateSelectInput(session, "collision_severity",
+                        choices = c("All" = "All", severity_labels),
+                        selected = "All"
+      )
+      updateSelectInput(session, "county",
+                        choices = c("All", sort(unique(na.omit(bike_or_ped_acc_all$COUNTY)))),
+                        selected = "All"
+      )
     })
     
-    # Updates — driven by filters, patch the existing map via proxy
     observe({
-      coords <- filtered_coords()
+      coords <- filtered_data_map()
       proxy <- leafletProxy("map") %>%
         clearHeatmap() %>%
-        clearMarkerClusters() %>%
         clearGroup("Accident Heatmap") %>%
-        clearGroup("Accident Clusters")
+        clearGroup("Accident Clusters") %>%
+        clearGlLayers()
       
-      if (!is.null(coords) && nrow(coords) > 0) {
-        proxy %>%
+      if (nrow(coords) > 0) {
+        coords_sf <- st_as_sf(coords, coords = c("lng", "lat"), crs = 4326, remove = FALSE)
+        
+        proxy <- proxy %>%
           addHeatmap(
             data = coords, lng = ~lng, lat = ~lat,
             blur = 22, max = 0.04, radius = 11,
             gradient = c("0.4" = "#64748B", "0.65" = "#1C2541", "0.85" = "#0A1128", "1.0" = "#DC2626"),
             group = "Accident Heatmap"
-          ) %>%
-          addCircleMarkers(
+          )
+        
+        if (nrow(coords) <= 50000) {
+          proxy %>% addCircleMarkers(
             data = coords, lng = ~lng, lat = ~lat,
             radius = 3, stroke = TRUE, color = "white", weight = 0.5,
             fillColor = brand$navy, fillOpacity = 0.4,
-            group = "Accident Clusters",
-            clusterOptions = markerClusterOptions()
+            clusterOptions = markerClusterOptions(),
+            group = "Accident Clusters"
           )
+        }
+      }
+    })
+    observe({
+      proxy <- leafletProxy("map")
+      
+      if (input$county == "All") {
+        bbox <- st_bbox(ca_boundary)
+        proxy %>% flyToBounds(
+          lng1 = bbox[["xmin"]], lat1 = bbox[["ymin"]],
+          lng2 = bbox[["xmax"]], lat2 = bbox[["ymax"]]
+        )
+      } else {
+        county_data <- bike_or_ped_acc_sf %>% filter(COUNTY == input$county)
+        
+        if (nrow(county_data) > 0) {
+          lng_range <- quantile(county_data$lng, probs = c(0.01, 0.99), na.rm = TRUE)
+          lat_range <- quantile(county_data$lat, probs = c(0.01, 0.99), na.rm = TRUE)
+          
+          proxy %>% flyToBounds(
+            lng1 = lng_range[[1]], lat1 = lat_range[[1]],
+            lng2 = lng_range[[2]], lat2 = lat_range[[2]]
+          )
+        }
       }
     })
 }
