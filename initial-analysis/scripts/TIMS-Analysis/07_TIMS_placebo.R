@@ -43,8 +43,7 @@ placebo_model1 <- rdrobust(y = placebo_data1$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 18,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "uniform")
 
 summary(placebo_model1)
 
@@ -110,8 +109,7 @@ placebo_model2 <- rdrobust(y = placebo_data2$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "uniform")
 
 summary(placebo_model2)
 
@@ -175,8 +173,7 @@ placebo_model3 <- rdrobust(y = placebo_data3$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "uniform")
 
 summary(placebo_model3)
 
@@ -241,8 +238,7 @@ placebo_model4 <- rdrobust(y = placebo_data4$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "uniform")
 
 summary(placebo_model4)
 
