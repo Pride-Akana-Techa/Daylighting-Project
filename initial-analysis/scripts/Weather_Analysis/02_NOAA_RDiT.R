@@ -175,7 +175,7 @@ ppt_model <- rdrobust(y = ppt_rdit$mean_ppt,
                        x = ppt_rdit$Time_ppt,
                        covs = model.matrix(~ Season_factor, ppt_rdit)[, -1],
                        c = 0,
-                       p = 2,
+                       p = 1,
                        h = 24,
                        kernel = "uniform")
 

@@ -10,7 +10,7 @@ library(rdrobust)
 
 tims_data <-  readRDS("initial-analysis/data-clean/updated_tims.rds")
 
-# Check yearly lighitng condition
+# Check yearly lighting condition
 lighting_distribution <- tims_data |> 
   filter(ACCIDENT_YEAR >= "2022" &
            PED_ACTION == "B" &
@@ -60,8 +60,7 @@ daylight_model <- rdrobust(y = daylight_data$PROPORTION,
                         c = 0,
                         p = 1,
                         h = 24,
-                        kernel = "uniform",
-                        bwselect = "mserd")
+                        kernel = "uniform")
 
 summary(daylight_model)
 
@@ -120,8 +119,7 @@ dark_model <- rdrobust(y = dark_data$PROPORTION,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "uniform")
 
 summary(dark_model)
 
