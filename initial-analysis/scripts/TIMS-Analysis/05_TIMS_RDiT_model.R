@@ -44,8 +44,7 @@ rd_model <- rdrobust(y = rdit_data$Total_crashes,
                      c = 0,
                      p = 1,
                      h = 24,
-                     kernel = "uniform",
-                     bwselect = "mserd")
+                     kernel = "uniform")
 
 summary(rd_model)
 
@@ -99,8 +98,7 @@ rd_model2 <- rdrobust(y = rdit_data2$Total_crashes,
                       c = 0,
                       p = 1,
                       h = 24,
-                      kernel = "uniform",
-                      bwselect = "mserd")
+                      kernel = "uniform")
 
 summary(rd_model2)
 
@@ -164,8 +162,7 @@ rd_model3 <- rdrobust(y = rdit_data3$Total_crashes,
                       c = 0,
                       p = 1,
                       h = 12,
-                      kernel = "uniform",
-                      bwselect = "mserd")
+                      kernel = "uniform")
 
 summary(rd_model3)
 
