@@ -79,7 +79,7 @@ temp_model <- rdrobust(y = temp_rdit$mean_temp,
                       c = 0,
                       p = 1,
                       h = 24,
-                      kernel = "uniform")
+                      kernel = "triangular")
 
 summary(temp_model)
 
@@ -96,7 +96,7 @@ temp_rd_out <- rdplot(y = temp_rdit$mean_temp_adj,
                  c = 0,
                  p = 1,
                  h = 24,
-                 kernel = "uniform",
+                 kernel = "triangular",
                  nbins = c(24, 24))
 
 temp_rd_out$rdplot +
@@ -112,6 +112,72 @@ temp_rd_out$rdplot +
 ggsave(filename = "initial-analysis/figs/temp_rdit.png",
        height = 10,
        width = 20)
+
+
+
+# Jan 2025 Temp -----------------------------------------------------------
+
+temp_rdit25 <- monthly_temp |>
+  filter(year >= "2024") |> 
+  mutate(date = as.Date(paste(year, month, "01", sep = "-")),
+         cutoff    = as.Date("2025-01-01"),
+         Time_temp = interval(cutoff, date) %/% months(1),
+         Post_temp = ifelse(date >= cutoff, 1, 0),
+         Season_factor = factor(
+           case_when(
+             month %in% c(12, 1, 2) ~ "Winter",
+             month %in% c(3, 4, 5) ~ "Spring",
+             month %in% c(6, 7, 8) ~ "Summer",
+             month %in% c(9, 10, 11) ~ "Fall"
+           ),
+           levels = c("Winter", "Spring", "Summer", "Fall")
+         )) |> 
+  select(Time_temp, Post_temp, Season_factor, mean_temp) 
+
+
+temp_model25 <- rdrobust(y = temp_rdit25$mean_temp,
+                        x = temp_rdit25$Time_temp,
+                        covs = model.matrix(~ Season_factor, temp_rdit25)[, -1],
+                        c = 0,
+                        p = 1,
+                        h = 12,
+                        kernel = "triangular")
+
+summary(temp_model25)
+
+# Adjust for seasonality
+temp_season_model25 <- lm(mean_temp ~ Season_factor,
+                         data = temp_rdit25)
+
+temp_rdit25$mean_temp_adj <- resid(temp_season_model25) + 
+  mean(temp_rdit25$mean_temp)
+
+# RDiT plot
+temp_rd_out25 <- rdplot(y = temp_rdit25$mean_temp_adj,
+                       x = temp_rdit25$Time_temp,
+                       c = 0,
+                       p = 1,
+                       h = 12,
+                       kernel = "triangular",
+                       nbins = c(12, 12))
+
+temp_rd_out25$rdplot +
+  labs(title = "Control RDiT Model",
+       y = "Mean Temperature (°F)",
+       x = "Months Relative to Jan 2025") +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold")
+  )
+
+ggsave(filename = "initial-analysis/figs/temp_rdit25.png",
+       height = 10,
+       width = 20)
+
+
+
+
 
 
 
@@ -170,14 +236,14 @@ ppt_rdit <- monthly_ppt |>
   select(Time_ppt, Post_ppt, Season_factor, mean_ppt) 
 
 
-# Model
+# Model 1: Linear
 ppt_model <- rdrobust(y = ppt_rdit$mean_ppt,
                        x = ppt_rdit$Time_ppt,
                        covs = model.matrix(~ Season_factor, ppt_rdit)[, -1],
                        c = 0,
                        p = 1,
                        h = 24,
-                       kernel = "uniform")
+                       kernel = "triangular")
 
 summary(ppt_model)
 
@@ -194,7 +260,7 @@ ppt_rd_out <- rdplot(y = ppt_rdit$mean_ppt_adj,
                       c = 0,
                       p = 1,
                       h = 24,
-                      kernel = "uniform",
+                      kernel = "triangular",
                       nbins = c(24, 24))
 
 ppt_rd_out$rdplot +
@@ -208,6 +274,108 @@ ppt_rd_out$rdplot +
   )
 
 ggsave(filename = "initial-analysis/figs/ppt_rdit.png",
+       height = 10,
+       width = 20)
+
+
+## Model 2: Quadratic
+
+ppt_model2 <- rdrobust(y = ppt_rdit$mean_ppt,
+                      x = ppt_rdit$Time_ppt,
+                      covs = model.matrix(~ Season_factor, ppt_rdit)[, -1],
+                      c = 0,
+                      p = 2,
+                      h = 24,
+                      kernel = "uniform")
+
+summary(ppt_model2)
+
+# Adjust for seasonality
+ppt_season_model2 <- lm(mean_ppt ~ Season_factor,
+                       data = ppt_rdit)
+
+ppt_rdit$mean_ppt_adj <- resid(ppt_season_model2) + 
+  mean(ppt_rdit$mean_ppt)
+
+# RDiT plot
+ppt_rd_out2 <- rdplot(y = ppt_rdit$mean_ppt_adj,
+                     x = ppt_rdit$Time_ppt,
+                     c = 0,
+                     p = 2,
+                     h = 24,
+                     kernel = "uniform",
+                     nbins = c(24, 24))
+
+ppt_rd_out2$rdplot +
+  labs(title = "Control RDiT Model",
+       y = "Precipitation (inches)",
+       x = "Months Relative to Jan 2024") +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold")
+  )
+
+
+
+# Jan 2025 Ppt ------------------------------------------------------------
+
+# Prepare precipitation data for RDiT
+ppt_rdit25 <- monthly_ppt |>
+  filter(year >= "2024") |> 
+  mutate(date = as.Date(paste(year, month, "01", sep = "-")),
+         cutoff    = as.Date("2025-01-01"),
+         Time_ppt = interval(cutoff, date) %/% months(1),
+         Post_ppt = ifelse(date >= cutoff, 1, 0),
+         Season_factor = factor(
+           case_when(
+             month %in% c(12, 1, 2) ~ "Winter",
+             month %in% c(3, 4, 5) ~ "Spring",
+             month %in% c(6, 7, 8) ~ "Summer",
+             month %in% c(9, 10, 11) ~ "Fall"
+           ),
+           levels = c("Winter", "Spring", "Summer", "Fall")
+         )) |> 
+  select(Time_ppt, Post_ppt, Season_factor, mean_ppt) 
+
+
+ppt_model25 <- rdrobust(y = ppt_rdit25$mean_ppt,
+                      x = ppt_rdit25$Time_ppt,
+                      covs = model.matrix(~ Season_factor, ppt_rdit25)[, -1],
+                      c = 0,
+                      p = 1,
+                      h = 12,
+                      kernel = "triangular")
+
+summary(ppt_model25)
+
+# Adjust for seasonality
+ppt_season_model25 <- lm(mean_ppt ~ Season_factor,
+                       data = ppt_rdit25)
+
+ppt_rdit25$mean_ppt_adj <- resid(ppt_season_model25) + 
+  mean(ppt_rdit25$mean_ppt)
+
+# RDiT plot
+ppt_rd_out25 <- rdplot(y = ppt_rdit25$mean_ppt_adj,
+                     x = ppt_rdit25$Time_ppt,
+                     c = 0,
+                     p = 1,
+                     h = 12,
+                     kernel = "triangular",
+                     nbins = c(12, 12))
+
+ppt_rd_out25$rdplot +
+  labs(title = "Control RDiT Model",
+       y = "Precipitation (inches)",
+       x = "Months Relative to Jan 2025") +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold")
+  )
+
+ggsave(filename = "initial-analysis/figs/ppt_rdit25.png",
        height = 10,
        width = 20)
 
