@@ -133,6 +133,64 @@ ggsave(filename = "initial-analysis/figs/season_rdit.png",
        width = 20)
 
 
+
+# Jan 2024 Cutoff (2-year span) -------------------------------------------
+two_year_rdit <- tims_crashes |> 
+  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(PED_ACTION == "B" & INTERSECTION == "Y") |>
+  mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
+         Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
+         Post = ifelse(Time >= 0, 1, 0),
+         Season_factor = factor(
+           case_when(
+             month(MONTH) %in% c(12, 1, 2) ~ "Winter",
+             month(MONTH) %in% c(3, 4, 5) ~ "Spring",
+             month(MONTH) %in% c(6, 7, 8) ~ "Summer",
+             month(MONTH) %in% c(9, 10, 11) ~ "Fall"
+           ),
+           levels = c("Winter", "Spring", "Summer", "Fall")
+         )) |> 
+  group_by(Time, Post, Season_factor) |> 
+  summarise(Total_crashes = n(),
+            .groups = "drop")
+
+## Run the model
+two_year_model <- rdrobust(y = two_year_rdit$Total_crashes,
+                      x = two_year_rdit$Time,
+                      covs = model.matrix(~ Season_factor, two_year_rdit)[, -1],
+                      c = 0,
+                      p = 1,
+                      h = 12,
+                      kernel = "triangular")
+
+summary(two_year_model)
+
+# Adjusting for seasonality before plotting
+seasonal_model <- lm(Total_crashes ~ Season_factor,
+                    data = two_year_rdit)
+
+two_year_rdit$Crash_adj <- resid(seasonal_model) + mean(two_year_rdit$Total_crashes)
+
+# plot
+rd_out <- rdplot(y = two_year_rdit$Crash_adj,
+                 x = two_year_rdit$Time,
+                 c = 0,
+                 p = 1,
+                 h = 12,
+                 kernel = "triangular",
+                 nbins = c(12, 12))
+
+rd_out$rdplot +
+  labs(title = "RDiT Model",
+       y = "Number of Crashes",
+       x = "Months Relative to Jan 2024") +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold")
+  )
+
+
 # Robustness Checks 1 -----------------------------------------------------
 
 ## 1. Using different bandwidths ##
@@ -554,12 +612,15 @@ ggplot(sens_all, aes(x = bw, y = coef)) +
   ) +
   labs(
     x = "Bandwidth (months)",
-    y = "RD Estimate (Robust, adjusted for Season)",
+    y = "RD Estimate",
     title = "Bandwidth Sensitivity of RDiT Estimates",
-    subtitle = "Shaded band = 95% robust confidence interval"
+    subtitle = "Shaded band = 95% confidence interval"
   ) +
   theme_minimal(base_size = 12) +
   theme(strip.text = element_text(face = "bold"))
 
+ggsave(filename = "initial-analysis/figs/bw_sensitivity.png",
+       height = 10,
+       width = 20)
 
 
