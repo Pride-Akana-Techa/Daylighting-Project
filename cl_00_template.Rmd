@@ -1,0 +1,66 @@
+---
+title: "[Your Report Title]"
+author: "[Your Name]"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 0. Setup
+
+```{r libraries}
+# load libraries
+library(data.table)
+library(tidyverse)
+library(here)
+
+# Other settings
+COL_TIMS <- "#003F5C"
+COL_CCRS <- "#FF6361"
+```
+
+---
+
+## 1. [Section Title]
+
+Write 1-2 sentences explaining what this section does and why.
+
+```{r section-1}
+# Comment on WHY, not WHAT
+# E.g.: restrict to post-policy period (AB 413 effective Jan 2024)
+```
+
+---
+
+## 2. [Section Title]
+
+```{r section-2}
+
+```
+
+---
+
+## 3. Results
+
+Describe what the table or figure shows before displaying it.\n
+
+e.g. point estimates & 95% CI vs. bandwidth (triangular kernel)
+```{r results-plot, fig.width=9, fig.height=5}
+# Always set fig.width and fig.height in chunk options
+# ggsave()
+# saveRDS()
+# write.csv()
+
+```
+
+---
+
+## Summary
+
+Write 2-3 sentences summarizing the key takeaway.\n
+
+e.g. Under a triangular kernel, increasing the bandwidth beyond 10-12 months 
+does not improve the precision of the estimates.
