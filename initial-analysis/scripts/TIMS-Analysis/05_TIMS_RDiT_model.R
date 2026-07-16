@@ -12,10 +12,9 @@
 # Load packages
 library(tidyverse)
 library(rdrobust) # for RDiT analysis and plots
-library(rddensity) 
-library(lmtest)
-library(car)
 library(ggh4x)
+library(nprobust)
+library(patchwork)
 
 # Read datasets
 tims_crashes <-  readRDS("initial-analysis/data/TIMS_Filtered.rds")
@@ -381,7 +380,7 @@ linear_rd_out$rdplot +
 
 ## Using Jan 2025
 rdit_data3 <- tims_crashes |> 
-  filter(ACCIDENT_YEAR >= 2024) |> 
+  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
   filter(PED_ACTION == "B" & INTERSECTION == "Y") |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
@@ -406,7 +405,7 @@ rd_model3 <- rdrobust(y = rdit_data3$Total_crashes,
                       c = 0,
                       p = 1,
                       h = 12,
-                      kernel = "uniform")
+                      kernel = "triangular")
 
 summary(rd_model3)
 
@@ -422,7 +421,7 @@ rd3_out <- rdplot(y = rdit_data3$Crash_adj3,
                   c = 0,
                   p = 1,
                   h = 12,
-                  kernel = "uniform",
+                  kernel = "triangular",
                   nbins = c(12, 12))
 
 rd3_out$rdplot +
@@ -438,97 +437,6 @@ rd3_out$rdplot +
 ggsave(filename = "initial-analysis/figs/Jan25_rdit.png",
        height = 10,
        width = 20)
-
-
-
-# Robustness Checks 2 -----------------------------------------------------
-
-## 1. Triangular weighting, No bandwidth selection ##
-
-
-rd_model_tri <- rdrobust(y = rdit_data3$Total_crashes,
-                            x = rdit_data3$Time,
-                            covs = model.matrix(~ Season_factor, rdit_data3)[, -1],
-                            c = 0,
-                            p = 1,
-                            kernel = "triangular")
-
-summary(rd_model_tri)
-
-# plot the model
-linear_data <- rdit_data3
-
-linear_model <- lm(Total_crashes ~ Season_factor,
-                   data = linear_data)
-
-linear_data$Crash_adj2 <- resid(linear_model) + 
-  mean(linear_data$Total_crashes)
-
-
-linear_rd_out <- rdplot(y = linear_data$Crash_adj2,
-                        x = linear_data$Time,
-                        c = 0,
-                        p = 1,
-                        kernel = "triangular",
-                        nbins = c(12, 12))
-
-linear_rd_out$rdplot +
-  labs(title = "RDiT Model",
-       y = "Number of Crashes",
-       x = "Months Relative to Jan 2025") +
-  theme(
-    plot.title = element_text(size = 18, face = "bold"),
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.title.y = element_text(size = 14, face = "bold")
-  )
-
-
-
-## 2. Just Triangular weighting ##
-
-
-rd_model_tri <- rdrobust(y = rdit_data3$Total_crashes,
-                         x = rdit_data3$Time,
-                         covs = model.matrix(~ Season_factor, rdit_data3)[, -1],
-                         c = 0,
-                         p = 1,
-                         h = 12,
-                         kernel = "triangular")
-
-summary(rd_model_tri)
-
-# plot the model
-linear_data <- rdit_data3
-
-linear_model <- lm(Total_crashes ~ Season_factor,
-                   data = linear_data)
-
-linear_data$Crash_adj2 <- resid(linear_model) + 
-  mean(linear_data$Total_crashes)
-
-
-linear_rd_out <- rdplot(y = linear_data$Crash_adj2,
-                        x = linear_data$Time,
-                        c = 0,
-                        p = 1,
-                        h = 12,
-                        kernel = "triangular",
-                        nbins = c(12, 12))
-
-linear_rd_out$rdplot +
-  labs(title = "RDiT Model",
-       y = "Number of Crashes",
-       x = "Months Relative to Jan 2025") +
-  theme(
-    plot.title = element_text(size = 18, face = "bold"),
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.title.y = element_text(size = 14, face = "bold")
-  )
-
-# Check RDiT results
-rd_model_tri$coef
-rd_model_tri$se
-rd_model_tri$ci
 
 
 
@@ -578,7 +486,7 @@ sens_2024 <- bw_sensitivity(
   cutoff    = 0,
   bw_grid   = bw_grid_2024
 )
-sens_2024$cutoff_label <- "January 2024 (Passage)"
+sens_2024$cutoff_label <- "January 2024 (Warning)"
 
 # --- Run for Jan 2025 cutoff (rdit_data3) ---
 sens_2025 <- bw_sensitivity(
@@ -602,7 +510,7 @@ ggplot(sens_all, aes(x = bw, y = coef)) +
   facet_wrap(~ cutoff_label, scales = "free") +
   facetted_pos_scales(
     x = list(
-      cutoff_label == "January 2024 (Passage)"    ~ scale_x_continuous(limits = c(4, 24),  breaks = seq(4, 24, by = 2)),
+      cutoff_label == "January 2024 (Warning)"    ~ scale_x_continuous(limits = c(4, 24),  breaks = seq(4, 24, by = 2)),
       cutoff_label == "January 2025 (Enforcement)" ~ scale_x_continuous(limits = c(4, 12),  breaks = seq(4, 12, by = 1))
     ),
     y = list(
@@ -624,3 +532,98 @@ ggsave(filename = "initial-analysis/figs/bw_sensitivity.png",
        width = 20)
 
 
+
+
+# Combined Model ----------------------------------------------------------
+
+h <- 12
+nudge_days <- 5
+
+make_ci_band <- function(data, y_var, side_filter, xseq) {
+  d <- data |> filter(side_filter(Time))
+  d$w <- (1 - abs(d$Time / h)) * (abs(d$Time / h) <= 1)
+  fit <- lm(reformulate("Time", response = y_var), data = d, weights = w)
+  pred <- predict(fit, newdata = data.frame(Time = xseq), se.fit = TRUE)
+  data.frame(
+    Time = xseq,
+    fit = pred$fit,
+    lwr = pred$fit - qt(0.975, fit$df.residual) * pred$se.fit,
+    upr = pred$fit + qt(0.975, fit$df.residual) * pred$se.fit
+  )
+}
+
+xseq_left  <- seq(-12, 0, length.out = 100)
+xseq_right <- seq(0, 12, length.out = 100)
+
+ci_2024 <- bind_rows(
+  make_ci_band(two_year_rdit, "Crash_adj", function(t) t < 0, xseq_left),
+  make_ci_band(two_year_rdit, "Crash_adj", function(t) t >= 0, xseq_right)
+) |> mutate(Date = as.Date("2024-01-01") + Time * 30.4368 - nudge_days,
+            Model = "Jan 2024 Cutoff")
+
+ci_2025 <- bind_rows(
+  make_ci_band(rdit_data3, "Crash_adj3", function(t) t < 0, xseq_left),
+  make_ci_band(rdit_data3, "Crash_adj3", function(t) t >= 0, xseq_right)
+) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368 + nudge_days,
+            Model = "Jan 2025 Cutoff")
+
+ci_all <- bind_rows(ci_2024, ci_2025)
+
+
+# --- Plot ---
+ggplot() +
+  geom_ribbon(data = ci_all, aes(x = Date, ymin = lwr, ymax = upr, fill = Model), alpha = 0.2) +
+  geom_line(data = filter(ci_all, Time < 0),
+            aes(Date, fit, color = Model),
+            linewidth = 1) +
+  
+  geom_line(data = filter(ci_all, Time > 0),
+            aes(Date, fit, color = Model),
+            linewidth = 1) +
+ 
+  geom_vline(xintercept = as.Date("2024-01-01"), linetype = "dashed", color = "black") +
+  geom_vline(xintercept = as.Date("2025-01-01"), linetype = "dashed", color = "black") +
+
+  scale_x_date(limits = c(as.Date("2023-01-01"),
+                          as.Date("2025-12-01")),
+               breaks = seq(from = as.Date("2023-01-01"),
+                            to   = as.Date("2025-11-01"),
+                            by   = "2 months"),
+               date_labels = "%b %Y",
+               expand = c(0.01, 0)) +
+  
+  scale_color_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
+                                "Jan 2025 Cutoff" = "#D55E00")) +
+
+ scale_fill_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
+                              "Jan 2025 Cutoff" = "#D55E00")) +
+
+  theme_minimal(base_size = 13) +
+  labs(title = "RDiT Models: Jan 2024 (Warning) vs. Jan 2025 (Enforcement)",
+       x = "Month", y = "Crash Count",
+       color = "Cutoff", fill = "Cutoff") +
+  
+  annotate("text",
+           x = as.Date("2024-01-01"),
+           y = Inf,
+           label = "Warning Begins",
+           vjust = 1.5,
+           fontface = "bold",
+           size = 4) +
+
+annotate("text",
+         x = as.Date("2025-01-01"),
+         y = Inf,
+         label = "Enforcement Begins",
+         vjust = 1.5,
+         fontface = "bold",
+         size = 4) +
+  
+  theme(plot.title = element_text(size = 16, face = "bold"),
+        axis.title.x = element_text(size = 13, face = "bold"),
+        axis.title.y = element_text(size = 13, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave(filename = "initial-analysis/figs/rdit2425.png",
+       height = 10,
+       width = 20)

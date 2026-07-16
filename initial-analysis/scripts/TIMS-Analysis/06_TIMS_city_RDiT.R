@@ -11,8 +11,10 @@
 # Load packages and data
 library(tidyverse)
 library(rdrobust)
+library(tigris)
+library(sf)
 
-tims_crashes <-  readRDS("initial-analysis/data/TIMS_Filtered.rds") 
+tims_crashes <- readRDS("initial-analysis/data/TIMS_Filtered.rds") 
 
 
 
@@ -20,7 +22,7 @@ tims_crashes <-  readRDS("initial-analysis/data/TIMS_Filtered.rds")
 
 san_diego <- tims_crashes |> 
   filter(CITY == "SAN DIEGO" & COLLISION_DATE >= "2024-05-01") |> 
-  filter(PED_ACTION == "B" & INTERSECTION == "Y") |> 
+  filter(PED_ACTION == "B") |> 
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month")) |>
   mutate(Time = interval(as.Date("2025-03-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0), 
@@ -34,10 +36,11 @@ san_diego <- tims_crashes |>
   group_by(CITY, Time, Post, Season_factor) |> 
   summarise(Total_crashes = n(), .groups = "drop")
 
+
 # Run the model
 san_diego_model <- rdrobust(y = san_diego$Total_crashes,
                        x = san_diego$Time,
-                       #covs = model.matrix(~ Season_factor, san_diego)[, -1],
+                       covs = model.matrix(~ Season_factor, san_diego)[, -1],
                        c = 0, 
                        p = 1,
                        h = 10,
@@ -56,9 +59,9 @@ san_diego_rd_out <- rdplot(y = san_diego$Crash_adj,
                  x = san_diego$Time,
                  c = 0,
                  p = 1,
-                 h = 10,
+                 h = 20,
                  kernel = "triangular",
-                 nbins = c(10, 10))
+                 nbins = c(20, 10))
 
 san_diego_rd_out$rdplot +
   labs(title = "San Diego RDiT Model",
@@ -73,6 +76,113 @@ san_diego_rd_out$rdplot +
 ggsave(filename = "initial-analysis/figs/san_diego_rdit.png",
        height = 10,
        width = 20)
+
+
+
+# SD Specific -------------------------------------------------------------
+
+sd <- read_csv("initial-analysis/data/San_Diego.csv")
+sd_filtered <- sd |> 
+  filter(person_role == "PEDESTRIAN") |> 
+  mutate(Date = mdy_hm(date_time),
+         MonthDate = floor_date(Date, "month"),
+         Month = month(Date), 
+         Year = year(Date)) |> 
+  filter(Year %in% c(2024, 2025, 2026)) 
+
+sd_data <- sd_filtered |> 
+  mutate(Time = interval(as.Date("2025-03-01"), MonthDate) %/% months(1),
+         Post = ifelse(Time >= 0, 1, 0), 
+         Season_factor = factor(
+           case_when(Month %in% c(12, 1, 2) ~ "Winter",
+                     Month %in% c(3, 4, 5) ~ "Spring",
+                     Month %in% c(6, 7, 8) ~ "Summer",
+                     Month %in% c(9, 10, 11) ~ "Fall"),
+           levels = c("Winter", "Spring", "Summer", "Fall"))
+  ) |> 
+  group_by(Year, Time, Post, Season_factor) |> 
+  summarise(Total_crashes = n(), .groups = "drop")
+
+# Run the model
+sd_model <- rdrobust(y = sd_data$Total_crashes,
+                            x = sd_data$Time,
+                            covs = model.matrix(~ Season_factor, sd_data)[, -1],
+                            c = 0, 
+                            p = 1,
+                            h = 15,
+                            kernel = "triangular")
+
+summary(sd_model)
+  
+
+
+# Trying San Diego --------------------------------------------------------
+
+san_diego2 <- places(state = "CA", cb = TRUE, year = 2024) |>
+  filter(NAME == "San Diego") |>
+  st_cast("POLYGON") |>
+  mutate(area = st_area(geometry)) |>
+  slice_max(area, n = 1) |>
+  select(-area) |>
+  st_transform(2230) # Cal Albers
+
+crashes <- readRDS("initial-analysis/data-clean/02_TIMS_Geocoded.rds") |>
+  dplyr::filter(ACCIDENT_YEAR >= 2022 & ACCIDENT_YEAR <= 2025) |>
+  st_transform(2230) |> # Cal Albers
+  st_filter(san_diego2)
+
+
+san_diego2 <- crashes |> 
+  filter(COLLISION_DATE >= "2024-05-01") |> 
+  filter(PED_ACTION == "B" & INTERSECTION == "Y") |> 
+  mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month")) |>
+  mutate(Time = interval(as.Date("2025-03-01"), MONTH) %/% months(1),
+         Post = ifelse(Time >= 0, 1, 0), 
+         Season_factor = factor(
+           case_when(month(MONTH) %in% c(12, 1, 2) ~ "Winter",
+                     month(MONTH) %in% c(3, 4, 5) ~ "Spring",
+                     month(MONTH) %in% c(6, 7, 8) ~ "Summer",
+                     month(MONTH) %in% c(9, 10, 11) ~ "Fall"),
+           levels = c("Winter", "Spring", "Summer", "Fall"))
+  ) |> 
+  group_by(CITY, Time, Post, Season_factor) |> 
+  summarise(Total_crashes = n(), .groups = "drop")
+
+# Run the model
+san_diego_model2 <- rdrobust(y = san_diego2$Total_crashes,
+                            x = san_diego2$Time,
+                            covs = model.matrix(~ Season_factor, san_diego2)[, -1],
+                            c = 0, 
+                            p = 1,
+                            h = 10,
+                            kernel = "triangular")
+
+summary(san_diego_model2)
+
+
+# Plot the model
+san_diego_season2 <- lm(Total_crashes ~ Season_factor,
+                       data = san_diego2)
+
+san_diego2$Crash_adj <- resid(san_diego_season2) + mean(san_diego2$Total_crashes)
+
+san_diego_rd_out2 <- rdplot(y = san_diego2$Crash_adj,
+                           x = san_diego2$Time,
+                           c = 0,
+                           p = 1,
+                           h = 10,
+                           kernel = "triangular",
+                           nbins = c(10, 10))
+
+san_diego_rd_out2$rdplot +
+  labs(title = "San Diego RDiT Model",
+       y = "Number of Crashes",
+       x = "Months Relative to March 2025") +
+  theme(
+    plot.title = element_text(size = 18, face = "bold"),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold")
+  )
 
 
 
