@@ -14,6 +14,7 @@
 # Load packages and dataset
 library(tidyverse)
 library(rdrobust)
+library(patchwork)
 
 tims_crashes <- readRDS("initial-analysis/data-clean/updated_tims.rds")
 crashes <- read_csv("initial-analysis/data/Crashes_California.csv")
@@ -189,6 +190,7 @@ bike_rd_out2$rdplot +
 
 ## Combined Model ##
 
+
 h <- 12
 nudge_days <- 5
 
@@ -220,62 +222,54 @@ ci_2025 <- bind_rows(
 ) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368 + nudge_days,
             Model = "Jan 2025 Cutoff")
 
-ci_all <- bind_rows(ci_2024, ci_2025)
 
+# combined plot, but scopes each panel to its own cutoff and window.
+make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
+                             event_label, x_limits, x_breaks,
+                             y_breaks = seq(100, 500, by = 50)) {
+  ggplot(ci_data) +
+    geom_ribbon(aes(x = Date, ymin = lwr, ymax = upr), fill = line_color, alpha = 0.2) +
+    geom_line(data = filter(ci_data, Time < 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_line(data = filter(ci_data, Time > 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_vline(xintercept = cutoff_date, linetype = "dashed", color = "black") +
+    annotate("text", x = cutoff_date, y = Inf, label = event_label,
+             vjust = 1.5, fontface = "bold", size = 4) +
+    scale_y_continuous(breaks = y_breaks) +
+    scale_x_date(date_labels = "%b %Y",
+                 limits = x_limits,
+                 breaks = x_breaks,
+                 expand = c(0.02, 0)) +
+    theme_minimal(base_size = 13) +
+    labs(title = model_label, x = "Month", y = "Crash Count") +
+    theme(plot.title = element_text(size = 16, face = "bold"),
+          axis.title.x = element_text(size = 13, face = "bold"),
+          axis.title.y = element_text(size = 13, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1))
+}
 
-# --- Plot ---
-ggplot() +
-  geom_ribbon(data = ci_all, aes(x = Date, ymin = lwr, ymax = upr, fill = Model), alpha = 0.2) +
-  geom_line(data = filter(ci_all, Time < 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_line(data = filter(ci_all, Time > 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_vline(xintercept = as.Date("2024-01-01"), linetype = "dashed", color = "black") +
-  geom_vline(xintercept = as.Date("2025-01-01"), linetype = "dashed", color = "black") +
-  
-  scale_x_date(limits = c(as.Date("2023-01-01"),
-                          as.Date("2025-12-01")),
-               breaks = seq(from = as.Date("2023-01-01"),
-                            to   = as.Date("2025-11-01"),
-                            by   = "2 months"),
-               date_labels = "%b %Y",
-               expand = c(0.01, 0)) +
-  
-  scale_color_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                                "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  scale_fill_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                               "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  theme_minimal(base_size = 13) +
-  labs(title = "RDiT (Bicycle Intersection Crashes)",
-       x = "Month", y = "Crash Count",
-       color = "Cutoff", fill = "Cutoff") +
-  
-  annotate("text",
-           x = as.Date("2024-01-01"),
-           y = Inf,
-           label = "Warning Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  annotate("text",
-           x = as.Date("2025-01-01"),
-           y = Inf,
-           label = "Enforcement Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  theme(plot.title = element_text(size = 16, face = "bold"),
-        axis.title.x = element_text(size = 13, face = "bold"),
-        axis.title.y = element_text(size = 13, face = "bold"),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+p_2024 <- make_cutoff_plot(
+  ci_2024,
+  cutoff_date = as.Date("2024-01-01"),
+  model_label = "Bicycle Intersection RDiT, Jan 2024 Cutoff",
+  line_color  = "#0072B2",
+  event_label = "Warning Begins",
+  x_limits = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+  x_breaks = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months")
+)
+
+p_2025 <- make_cutoff_plot(
+  ci_2025,
+  cutoff_date = as.Date("2025-01-01"),
+  model_label = "Bicycle Intersection RDiT, Jan 2025 Cutoff",
+  line_color  = "#D55E00",
+  event_label = "Enforcement Begins",
+  x_limits = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+  x_breaks = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+)
+
+# Side by side 
+p_2024 + p_2025
+
 
 ggsave(filename = "initial-analysis/figs/bike_int_rdit.png",
        height = 10,
@@ -434,74 +428,67 @@ ci_2025 <- bind_rows(
 ) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368 + nudge_days,
             Model = "Jan 2025 Cutoff")
 
-ci_all <- bind_rows(ci_2024, ci_2025)
 
+# combined plot, but scopes each panel to its own cutoff and window.
+make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
+                             event_label, x_limits, x_breaks,
+                             y_breaks = seq(200, 600, by = 50)) {
+  ggplot(ci_data) +
+    geom_ribbon(aes(x = Date, ymin = lwr, ymax = upr), fill = line_color, alpha = 0.2) +
+    geom_line(data = filter(ci_data, Time < 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_line(data = filter(ci_data, Time > 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_vline(xintercept = cutoff_date, linetype = "dashed", color = "black") +
+    annotate("text", x = cutoff_date, y = Inf, label = event_label,
+             vjust = 1.5, fontface = "bold", size = 4) +
+    scale_y_continuous(breaks = y_breaks) +
+    scale_x_date(date_labels = "%b %Y",
+                 limits = x_limits,
+                 breaks = x_breaks,
+                 expand = c(0.02, 0)) +
+    theme_minimal(base_size = 13) +
+    labs(title = model_label, x = "Month", y = "Crash Count") +
+    theme(plot.title = element_text(size = 16, face = "bold"),
+          axis.title.x = element_text(size = 13, face = "bold"),
+          axis.title.y = element_text(size = 13, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1))
+}
 
-# --- Plot ---
-ggplot() +
-  geom_ribbon(data = ci_all, aes(x = Date, ymin = lwr, ymax = upr, fill = Model), alpha = 0.2) +
-  geom_line(data = filter(ci_all, Time < 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_line(data = filter(ci_all, Time > 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_vline(xintercept = as.Date("2024-01-01"), linetype = "dashed", color = "black") +
-  geom_vline(xintercept = as.Date("2025-01-01"), linetype = "dashed", color = "black") +
-  
-  scale_x_date(limits = c(as.Date("2023-01-01"),
-                          as.Date("2025-12-01")),
-               breaks = seq(from = as.Date("2023-01-01"),
-                            to   = as.Date("2025-11-01"),
-                            by   = "2 months"),
-               date_labels = "%b %Y",
-               expand = c(0.01, 0)) +
-  
-  scale_color_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                                "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  scale_fill_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                               "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  theme_minimal(base_size = 13) +
-  labs(title = "RDiT (Bicycle Non-intersection Crashes)",
-       x = "Month", y = "Crash Count",
-       color = "Cutoff", fill = "Cutoff") +
-  
-  annotate("text",
-           x = as.Date("2024-01-01"),
-           y = Inf,
-           label = "Warning Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  annotate("text",
-           x = as.Date("2025-01-01"),
-           y = Inf,
-           label = "Enforcement Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  theme(plot.title = element_text(size = 16, face = "bold"),
-        axis.title.x = element_text(size = 13, face = "bold"),
-        axis.title.y = element_text(size = 13, face = "bold"),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+p_2024 <- make_cutoff_plot(
+  ci_2024,
+  cutoff_date = as.Date("2024-01-01"),
+  model_label = "Bicycle Non-intersection RDiT, Jan 2024 Cutoff",
+  line_color  = "#0072B2",
+  event_label = "Warning Begins",
+  x_limits = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+  x_breaks = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months")
+)
+
+p_2025 <- make_cutoff_plot(
+  ci_2025,
+  cutoff_date = as.Date("2025-01-01"),
+  model_label = "Bicycle Non-intersection RDiT, Jan 2025 Cutoff",
+  line_color  = "#D55E00",
+  event_label = "Enforcement Begins",
+  x_limits = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+  x_breaks = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+)
+
+# Side by side 
+p_2024 + p_2025
 
 ggsave(filename = "initial-analysis/figs/bike_int.png",
        height = 10,
        width = 20)
 
-# Crashes with no pedestrians ---------------------------------------------
+
+# Non Pedestrians Intersections ---------------------------------------------
 
 ## Jan 2024 Cutoff
 # Prepare model data
 no_ped_data <- tims_crashes |> 
   filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
-  filter(PED_ACTION == "A") |>
+  filter(PED_ACTION == "A" &
+         INTERSECTION == "Y") |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -559,7 +546,8 @@ no_ped_rd_out$rdplot +
 # Prepare data for the model
 no_ped_data2 <- tims_crashes |> 
   filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
-  filter(PED_ACTION == "A") |>
+  filter(PED_ACTION == "A" &
+           INTERSECTION == "Y") |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -614,6 +602,7 @@ no_ped_rd_out2$rdplot +
 
 
 ## Combined Model
+
 h <- 12
 nudge_days <- 5
 
@@ -645,78 +634,69 @@ ci_2025 <- bind_rows(
 ) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368 + nudge_days,
             Model = "Jan 2025 Cutoff")
 
-ci_all <- bind_rows(ci_2024, ci_2025)
 
+# combined plot, but scopes each panel to its own cutoff and window.
+make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
+                             event_label, x_limits, x_breaks,
+                             y_breaks = seq(3000, 5000, by = 250)) {
+  ggplot(ci_data) +
+    geom_ribbon(aes(x = Date, ymin = lwr, ymax = upr), fill = line_color, alpha = 0.2) +
+    geom_line(data = filter(ci_data, Time < 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_line(data = filter(ci_data, Time > 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_vline(xintercept = cutoff_date, linetype = "dashed", color = "black") +
+    annotate("text", x = cutoff_date, y = Inf, label = event_label,
+             vjust = 1.5, fontface = "bold", size = 4) +
+    scale_y_continuous(breaks = y_breaks) +
+    scale_x_date(date_labels = "%b %Y",
+                 limits = x_limits,
+                 breaks = x_breaks,
+                 expand = c(0.02, 0)) +
+    theme_minimal(base_size = 13) +
+    labs(title = model_label, x = "Month", y = "Crash Count") +
+    theme(plot.title = element_text(size = 16, face = "bold"),
+          axis.title.x = element_text(size = 13, face = "bold"),
+          axis.title.y = element_text(size = 13, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1))
+}
 
-# --- Plot ---
-ggplot() +
-  geom_ribbon(data = ci_all, aes(x = Date, ymin = lwr, ymax = upr, fill = Model), alpha = 0.2) +
-  geom_line(data = filter(ci_all, Time < 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_line(data = filter(ci_all, Time > 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_vline(xintercept = as.Date("2024-01-01"), linetype = "dashed", color = "black") +
-  geom_vline(xintercept = as.Date("2025-01-01"), linetype = "dashed", color = "black") +
-  
-  scale_x_date(limits = c(as.Date("2023-01-01"),
-                          as.Date("2025-12-01")),
-               breaks = seq(from = as.Date("2023-01-01"),
-                            to   = as.Date("2025-11-01"),
-                            by   = "2 months"),
-               date_labels = "%b %Y",
-               expand = c(0.01, 0)) +
-  
-  scale_color_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                                "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  scale_fill_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                               "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  theme_minimal(base_size = 13) +
-  labs(title = "RDiT (Crashes with No Pedestrians)",
-       x = "Month", y = "Crash Count",
-       color = "Cutoff", fill = "Cutoff") +
-  
-  annotate("text",
-           x = as.Date("2024-01-01"),
-           y = Inf,
-           label = "Warning Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  annotate("text",
-           x = as.Date("2025-01-01"),
-           y = Inf,
-           label = "Enforcement Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  theme(plot.title = element_text(size = 16, face = "bold"),
-        axis.title.x = element_text(size = 13, face = "bold"),
-        axis.title.y = element_text(size = 13, face = "bold"),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+p_2024 <- make_cutoff_plot(
+  ci_2024,
+  cutoff_date = as.Date("2024-01-01"),
+  model_label = "Non-pedestrian Intersection RDiT, Jan 2024 Cutoff",
+  line_color  = "#0072B2",
+  event_label = "Warning Begins",
+  x_limits = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+  x_breaks = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months")
+)
+
+p_2025 <- make_cutoff_plot(
+  ci_2025,
+  cutoff_date = as.Date("2025-01-01"),
+  model_label = "Non-pedestrian Intersection RDiT, Jan 2025 Cutoff",
+  line_color  = "#D55E00",
+  event_label = "Enforcement Begins",
+  x_limits = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+  x_breaks = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+)
+
+# Side by side 
+p_2024 + p_2025
 
 ggsave(filename = "initial-analysis/figs/no_ped.png",
        height = 10,
        width = 20)
 
-# Pedestrians not at Intersections ----------------------------------------
+#  Other Pedestrian Related Action ----------------------------------------
 ## This includes:
-## - Crossing in crosswalk not at intersection
 ## - Crossing not in crosswalk
 ## - In Road and Shoulder Area
+## - Pedestrian not in Road
 
 ## 1. Jan 2024 Cutoff
 # Prepare model data
 other_ped_data <- tims_crashes |> 
   filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
-  filter(PED_ACTION %in% c("C", "D", "E")) |>
+  filter(PED_ACTION %in% c("D", "E", "F")) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -774,7 +754,7 @@ other_ped_rd_out$rdplot +
 # Prepare data for the model
 other_ped_data2 <- tims_crashes |> 
   filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
-  filter(PED_ACTION %in% c("C", "D", "E")) |>
+  filter(PED_ACTION %in% c("D", "E", "F")) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -827,7 +807,11 @@ other_ped_rd_out2$rdplot +
     axis.title.y = element_text(size = 14, face = "bold")
   )
 
+
 # Merged models
+h <- 12
+nudge_days <- 5
+
 make_ci_band <- function(data, y_var, side_filter, xseq) {
   d <- data |> filter(side_filter(Time))
   d$w <- (1 - abs(d$Time / h)) * (abs(d$Time / h) <= 1)
@@ -856,66 +840,53 @@ ci_2025 <- bind_rows(
 ) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368 + nudge_days,
             Model = "Jan 2025 Cutoff")
 
-ci_all <- bind_rows(ci_2024, ci_2025)
 
+# combined plot, but scopes each panel to its own cutoff and window.
+make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
+                             event_label, x_limits, x_breaks,
+                             y_breaks = seq(300, 600, by = 50)) {
+  ggplot(ci_data) +
+    geom_ribbon(aes(x = Date, ymin = lwr, ymax = upr), fill = line_color, alpha = 0.2) +
+    geom_line(data = filter(ci_data, Time < 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_line(data = filter(ci_data, Time > 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_vline(xintercept = cutoff_date, linetype = "dashed", color = "black") +
+    annotate("text", x = cutoff_date, y = Inf, label = event_label,
+             vjust = 1.5, fontface = "bold", size = 4) +
+    scale_y_continuous(breaks = y_breaks) +
+    scale_x_date(date_labels = "%b %Y",
+                 limits = x_limits,
+                 breaks = x_breaks,
+                 expand = c(0.02, 0)) +
+    theme_minimal(base_size = 13) +
+    labs(title = model_label, x = "Month", y = "Crash Count") +
+    theme(plot.title = element_text(size = 16, face = "bold"),
+          axis.title.x = element_text(size = 13, face = "bold"),
+          axis.title.y = element_text(size = 13, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1))
+}
 
-# --- Plot ---
-ggplot() +
-  geom_ribbon(data = ci_all, aes(x = Date, ymin = lwr, ymax = upr, fill = Model), alpha = 0.2) +
-  geom_line(data = filter(ci_all, Time < 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_line(data = filter(ci_all, Time > 0),
-            aes(Date, fit, color = Model),
-            linewidth = 1) +
-  
-  geom_vline(xintercept = as.Date("2024-01-01"), linetype = "dashed", color = "black") +
-  geom_vline(xintercept = as.Date("2025-01-01"), linetype = "dashed", color = "black") +
-  
-  scale_y_continuous(breaks = seq(350, 600, by = 50)) +
-  
-  scale_x_date(limits = c(as.Date("2023-01-01"),
-                          as.Date("2025-12-01")),
-               breaks = seq(from = as.Date("2023-01-01"),
-                            to   = as.Date("2025-11-01"),
-                            by   = "2 months"),
-               date_labels = "%b %Y",
-               expand = c(0.01, 0)) +
-  
-  scale_color_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                                "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  scale_fill_manual(values = c("Jan 2024 Cutoff" = "#0072B2",
-                               "Jan 2025 Cutoff" = "#D55E00")) +
-  
-  theme_minimal(base_size = 13) +
-  labs(title = "RDiT (Pedestrian Non-interecetion Crashes)",
-       x = "Month", y = "Crash Count",
-       color = "Cutoff", fill = "Cutoff") +
-  
-  annotate("text",
-           x = as.Date("2024-01-01"),
-           y = Inf,
-           label = "Warning Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  annotate("text",
-           x = as.Date("2025-01-01"),
-           y = Inf,
-           label = "Enforcement Begins",
-           vjust = 1.5,
-           fontface = "bold",
-           size = 4) +
-  
-  theme(plot.title = element_text(size = 16, face = "bold"),
-        axis.title.x = element_text(size = 13, face = "bold"),
-        axis.title.y = element_text(size = 13, face = "bold"),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+p_2024 <- make_cutoff_plot(
+  ci_2024,
+  cutoff_date = as.Date("2024-01-01"),
+  model_label = "Other Pedestrian-related RDiT, Jan 2024 Cutoff",
+  line_color  = "#0072B2",
+  event_label = "Warning Begins",
+  x_limits = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+  x_breaks = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months")
+)
 
+p_2025 <- make_cutoff_plot(
+  ci_2025,
+  cutoff_date = as.Date("2025-01-01"),
+  model_label = "Other Pedestrian-related RDiT, Jan 2025 Cutoff",
+  line_color  = "#D55E00",
+  event_label = "Enforcement Begins",
+  x_limits = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+  x_breaks = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+)
 
+# Side by side 
+p_2024 + p_2025
 
 
 
