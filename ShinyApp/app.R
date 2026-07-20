@@ -3,7 +3,6 @@
 # ==========================================================================
 
 # Libraries
-
 library(shiny)
 library(shinyjs)
 library(plotly)
@@ -17,7 +16,6 @@ library(here)
 library(htmlwidgets)
 library(leafgl)
 library(leaflet.extras)
-
 
 # Palette
 brand <- list(
@@ -63,7 +61,7 @@ app_theme <- bs_theme(
     .app-sidebar {
       width: 320px;
       flex: 0 0 320px;
-      background: #FFFFFF;
+      background: #1E2A47;
       border-right: 1px solid var(--brand-border);
       display: flex;
       flex-direction: column;
@@ -80,7 +78,7 @@ app_theme <- bs_theme(
     }
     
     
-    .brand-title { font-weight: 700; font-size: 1.2rem; color: var(--brand-navy); letter-spacing: -0.03em; line-height: 1.2; }
+    .brand-title { font-weight: 700; font-size: 1.2rem; color: #F1F4F9; letter-spacing: -0.03em; line-height: 1.2; }
     .brand-subtitle { font-size: 0.78rem; color: var(--brand-muted); margin-top: 8px; line-height: 1.4; font-family: 'Inter', sans-serif; font-weight: 400; }
 
     .sidebar-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; }
@@ -206,6 +204,72 @@ app_theme <- bs_theme(
       padding: 0.05em 0.2em;
       border-radius: 2px;
     }
+    
+      /* Literature review content (pulled in from Word doc via pandoc) */
+    .lit-content h1, .lit-content h2, .lit-content h3 {
+      font-family: 'Playfair Display', serif;
+      color: var(--brand-navy);
+      margin-top: 28px;
+    }
+    .lit-content p {
+      color: var(--brand-ink);
+      line-height: 1.7;
+      font-size: 0.92rem;
+    }
+    .lit-content ul, .lit-content ol {
+      padding-left: 20px;
+      color: var(--brand-ink);
+      line-height: 1.7;
+    }
+    .lit-content blockquote {
+      border-left: 3px solid var(--brand-border);
+      padding-left: 16px;
+      color: var(--brand-muted);
+      font-style: italic;
+    }
+    
+    /* Variable definition tables */
+.var-table-wrap {
+  margin-top: 20px;
+  border-top: 1px solid var(--brand-border);
+  border-bottom: 1px solid var(--brand-border);
+}
+.var-table {
+  width: 100%%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.var-table thead th {
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--brand-ink);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--brand-border);
+}
+.var-table tbody td {
+  padding: 12px 16px;
+  vertical-align: top;
+  color: var(--brand-ink);
+  border-bottom: 1px solid var(--brand-highlight);
+}
+.var-table tbody tr:nth-child(odd) {
+  background-color: var(--brand-surface);
+}
+.var-table .var-name {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  white-space: nowrap;
+  color: var(--brand-navy);
+}
+.var-table .var-role {
+  color: var(--brand-muted);
+  font-family: monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 
     @media (max-width: 950px) {
       .app-shell { flex-direction: column; }
@@ -216,14 +280,41 @@ app_theme <- bs_theme(
     }
   ", brand$navy, brand$ink, brand$muted, brand$surface, brand$border, brand$highlight, brand$link, brand$accent))
 
-# Load data
-crossings_cal       <- readRDS(here("ShinyApp", "shiny-data", "OSM_california_crossings.rds"))
-ca_boundary         <- readRDS(here("ShinyApp", "shiny-data", "ca_boundary.rds"))
-bike_or_ped_acc_all <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_all.rds"))
-bike_or_ped_acc_sf  <- readRDS(here("ShinyApp", "shiny-data", "TIMS_bike_ped_geo.rds"))
 
-bike_or_ped_acc_all <- bike_or_ped_acc_all %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
-bike_or_ped_acc_sf  <- bike_or_ped_acc_sf  %>% mutate(COLLISION_DATE = as.Date(COLLISION_DATE))
+# Load Data ---------------------------------------------------------------
+
+ca_boundary   <- readRDS("shiny-data/ca_boundary.rds")
+bike_or_ped_acc_all <- readRDS("shiny-data/TIMS_bike_ped_all.rds")
+bike_or_ped_acc_sf  <- readRDS("shiny-data/TIMS_bike_ped_geo.rds")
+
+bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
+  st_transform(4326)
+
+bike_or_ped_acc_all <- bike_or_ped_acc_all %>%
+  mutate(
+    COLLISION_DATE = as.Date(COLLISION_DATE),
+    year  = lubridate::year(COLLISION_DATE),
+    month = lubridate::floor_date(COLLISION_DATE, "month")
+  )
+
+map_coords <- st_coordinates(bike_or_ped_acc_sf)
+bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
+  st_drop_geometry() %>%
+  mutate(
+    COLLISION_DATE = as.Date(COLLISION_DATE),
+    lng = map_coords[, 1],
+    lat = map_coords[, 2],
+    year  = lubridate::year(COLLISION_DATE),
+    month = lubridate::floor_date(COLLISION_DATE, "month")
+  )
+
+# Convert word to HTML
+docx_path <- normalizePath("shiny-data/literature_review.docx", mustWork = TRUE)
+
+if (!dir.exists("www")) dir.create("www")
+html_path <- file.path(normalizePath("www", mustWork = TRUE), "literature_review.html")
+
+includeHTML("www/literature_review.html")
 
 
 # ==========================================================================
@@ -233,10 +324,10 @@ filter_panel_register <- div(
   div(class = "section-eyebrow", "crash filters"),
   div(
     class = "register-container",
-    div(class = "register-header", span("Filters"), span("argument context")),
+    div(class = "register-header", span("Map & Graph Controls")),
     div(
       class = "register-row",
-      span("Victim Profile"),
+      span("Incident Severity"),
       selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
     ),
     div(
@@ -246,12 +337,12 @@ filter_panel_register <- div(
     ),
     div(
       class = "register-row",
-      span("Geographic Setting"),
+      span("Crash Location"),
       selectInput(inputId = "location_type", label = NULL, choices = c("All", "Intersection", "Non-Intersection"), selected = "All", width = "160px")
     ),
     div(
       class = "register-row",
-      span("Temporal Boundary"),
+      span("Time Frame"),
       sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
     )
   )
@@ -334,16 +425,19 @@ overview_page <- div(
         style = "border: 1px solid var(--brand-border); opacity: 0.85; margin-top: 12px;"
       )
     )
-  ),
+  )
   
 
 )
 
 literature_page <- div(
-  class = "page-content", 
-  div(class = "section-eyebrow", ""), 
-  h1(class = "page-title", "Literature"), 
-  style = "color: var(--brand-muted);")
+  class = "page-content",
+  h1(class = "page-title", "Literature"),
+  div(
+    class = "document-card lit-content",
+    includeHTML("www/literature_review.html")
+  )
+)
 
 
 maps_page <- div(
@@ -356,18 +450,56 @@ maps_page <- div(
     
     # Left Configuration
     div(
-      filter_panel_register,
+      filter_panel_register <- div(
+        div(class = "section-eyebrow", "crash filters"),
+        div(
+          class = "register-container",
+          div(class = "register-header", span("Map & Graph Controls")),
+          div(
+            class = "register-row",
+            span("Incident Severity"),
+            selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
+          ),
+          div(
+            class = "register-row",
+            span("Worst Injury Severity"),
+            selectInput(inputId = "collision_severity", label = NULL, choices = "All", selected = "All", width = "160px")
+          ),
+          div(
+            class = "register-row",
+            span("Road User Class"),
+            checkboxGroupInput(inputId = "mode", label = NULL, choices = c("Pedestrian", "Bicyclist"), selected = c("Pedestrian", "Bicyclist"), inline = TRUE)
+          ),
+          div(
+            class = "register-row",
+            span("Crash Location"),
+            selectInput(inputId = "location_type", label = NULL, choices = c("All", "Intersection", "Non-Intersection"), selected = "All", width = "160px")
+          ),
+          
+          div(
+            class = "register-row",
+            span("County"),
+            selectInput(inputId = "county", label = NULL, choices = "All", selected = "All", width = "160px")
+          ),
+          div(
+            class = "register-row",
+            span("Time Frame"),
+            sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
+          )
+        )
       
+      ),
       div(class = "section-eyebrow", "aggregation controls"),
       div(
         class = "register-container",
-        div(class = "register-header", span("Time Series"), span("Step")),
+        div(class = "register-header", span("Graph Controls")),
         div(
           class = "register-row",
-          span("Interval Scale"),
+          span("Interval"),
           radioButtons("granularity", label = NULL, choices = c("Yearly" = "year", "Monthly" = "month"), selected = "year", inline = TRUE)
         )
       ),
+      uiOutput("cluster_warning"),
       uiOutput("range_warning")
     ),
     
@@ -387,28 +519,96 @@ maps_page <- div(
   )
 )
 
-before_after_page <- div(
+methodology_page <- div(
   class = "page-content",
-  h1(class = "page-title", "Before/After Analysis"),
+  h1(class = "page-title", "Methodology"),
   
-  layout_columns(
-    col_widths = c(6, 6),
-    gap = "2.5rem",
-    div(
+  navset_tab(
+    id = "methodology_tabs",
+    
+    nav_panel(
+      title = "RDiT Model",
+      value = "rdit",
       div(
         class = "document-card",
-        div(class = "document-card-title", "A. Total Yearly Deaths of Pedestrians at Intersections in California"),
-        img(src = "yearly_ped_int_death.png", width = "100%", style = "border: 1px solid var(--brand-border);")
-      ),
-      p("This figure shows a drastic decrease in the number of deaths of pedestrians at intersections from January 2024, when the law was enforced. It is also observed that the number of deaths continued to decline after January 2025, when enforcement moved from warning based to citation based.", style = "font-size:0.9rem; line-height:1.55; color: var(--brand-ink);")
+        div(class = "document-card-title", "Regression Discontinuity in Time"),
+        p(
+          "To estimate the causal effect of the enforcement AB 413 on crash frequency, we implement a sharp Regression Discontinuity in Time (RDiT) design using the ",
+          tags$code("rdrobust"), " package. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with the each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        ),
+        div(
+          style = "padding: 16px 0; text-align: center; font-size: 1.05rem;",
+          "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
+        ),
+        
+        div(class = "document-card-title", "Variable Definitions"),
+        div(
+          class = "var-table-wrap",
+          tags$table(
+            class = "var-table",
+            tags$thead(
+              tags$tr(
+                tags$th("Variable"),
+                tags$th("Description"),
+                tags$th("Role in Analysis")
+              )
+            ),
+            tags$tbody(
+              tags$tr(
+                tags$td(class = "var-name", HTML("Y<sub>t</sub>")),
+                tags$td("Crash count (pedestrian/bicyclist collisions) at time t."),
+                tags$td(class = "var-role", "Dependent Variable")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("D<sub>t</sub>")),
+                tags$td("Indicator equal to 1 for periods after the enforcement cutoff."),
+                tags$td(class = "var-role", "Key Independent Variable")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("t &minus; t<sub>0</sub>")),
+                tags$td("Running variable: time elapsed relative to the cutoff date."),
+                tags$td(class = "var-role", "Running Variable")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("&beta;<sub>1</sub>, &beta;<sub>2</sub>")),
+                tags$td("Slope terms allowing pre- and post-cutoff trends to differ."),
+                tags$td(class = "var-role", "Control")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", "Season_t"),
+                tags$td("Categorical control for season, capturing seasonal variation in crash frequency."),
+                tags$td(class = "var-role", "Control")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("h")),
+                tags$td("Bandwidth defining the estimation window around the cutoff, selected via MSE-optimal procedure."),
+                tags$td(class = "var-role", "Tuning Parameter")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("&tau;")),
+                tags$td("Estimated treatment effect at the cutoff, the coefficient of interest."),
+                tags$td(class = "var-role", "Coefficient of Interest")
+              ),
+              tags$tr(
+                tags$td(class = "var-name", HTML("&epsilon;<sub>t</sub>")),
+                tags$td("Idiosyncratic error term."),
+                tags$td(class = "var-role", "Error Term")
+              )
+            )
+          )
+        )
+      )
     ),
-    div(
+    
+    nav_panel(
+      title = "Tobit Model (Grid Analysis)",
+      value = "tobit",
       div(
         class = "document-card",
-        div(class = "document-card-title", "B. Total Monthly Deaths of Pedestrians at Intersections in California"),
-        img(src = "monthly_ped_int_death.png", width = "100%", style = "border: 1px solid var(--brand-border);")
-      ),
-      p("In the monthly trend, the total number of deaths fluctuates throughout each year due to seasonal changes, but overall, there is a sharp decrease from the start of 2014 to the end of 2025.", style = "font-size:0.9rem; line-height:1.55; color: var(--brand-ink);")
+        div(class = "document-card-title", "Tobit Model for Spatial Grid Analysis"),
+        p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
+      )
     )
   )
 )
@@ -435,7 +635,8 @@ ui <- page_fluid(
   style = "padding: 0; max-width: none;",
   tags$head(
     tags$title("California Assembly Bill 413: Daylighting Law"),
-    tags$link(rel = "icon", href = "data:,")
+    tags$link(rel = "icon", href = "data:,"),
+    tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js")
   ),
   
   useShinyjs(), 
@@ -455,8 +656,8 @@ ui <- page_fluid(
         actionLink("nav_overview", "Overview", class = "sidebar-nav-link active"),
         actionLink("nav_literature", "Literature", class = "sidebar-nav-link"),
         actionLink("nav_maps", "Maps & Trends", class = "sidebar-nav-link"),
-        actionLink("nav_before_after", "Before/After Analysis", class = "sidebar-nav-link"),
-        actionLink("nav_results", "Results Log", class = "sidebar-nav-link"),
+        actionLink("nav_methodology", "Methodology", class = "sidebar-nav-link"),
+        actionLink("nav_results", "Results", class = "sidebar-nav-link"),
         actionLink("nav_about", "About Us", class = "sidebar-nav-link")
       )
     ),
@@ -470,7 +671,7 @@ ui <- page_fluid(
         nav_panel(title = "Overview",       value = "overview",     overview_page),
         nav_panel(title = "Literature",       value = "literature", literature_page),
         nav_panel(title = "Maps",           value = "maps",         maps_page),
-        nav_panel(title = "Before/After",   value = "before_after", before_after_page),
+        nav_panel(title = "Methodology",   value = "methodology", methodology_page),
         nav_panel(title = "Results",        value = "results",      results_page),
         nav_panel(title = "About Us",       value = "about",        about_page)
       )
@@ -485,12 +686,12 @@ ui <- page_fluid(
 
 server <- function(input, output, session) {
   
-  # Sidebar Class-Switching Engine
+  # Sidebar
   nav_map <- list(
     "nav_overview" = "overview",
     "nav_literature" = "literature",
     "nav_maps" = "maps",
-    "nav_before_after" = "before_after",
+    "nav_methodology" = "methodology",
     "nav_results" = "results",
     "nav_about" = "about"
   )
@@ -508,7 +709,6 @@ server <- function(input, output, session) {
     })
   })
   
-  # Reactive Data Pipeline
   apply_filters <- function(data) {
     if (input$victim_type == "Fatalities") {
       data <- data %>% filter(COUNT_PED_KILLED > 0 | COUNT_BICYCLIST_KILLED > 0)
@@ -519,7 +719,6 @@ server <- function(input, output, session) {
     if (!is.null(input$mode) && length(input$mode) > 0) {
       ped_selected <- "Pedestrian" %in% input$mode
       bic_selected <- "Bicyclist" %in% input$mode
-      
       if (ped_selected && bic_selected) {
         data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
       } else if (ped_selected) {
@@ -537,21 +736,43 @@ server <- function(input, output, session) {
       data <- data %>% filter(INTERSECTION == "N")
     }
     
-    if (!is.na(input$date_range[1]) && !is.na(input$date_range[2])) {
-      data <- data %>% filter(!is.na(COLLISION_DATE), COLLISION_DATE >= input$date_range[1], COLLISION_DATE <= input$date_range[2])
+    if (!is.null(input$collision_severity) && input$collision_severity != "All") {
+      data <- data %>% filter(COLLISION_SEVERITY == input$collision_severity)
+    }
+    
+    if (!is.null(input$county) && input$county != "All") {
+      data <- data %>% filter(COUNTY == input$county)
+    }
+    
+    dr <- date_range_debounced()
+    if (!is.null(dr) && !is.na(dr[1]) && !is.na(dr[2])) {
+      data <- data %>% filter(!is.na(COLLISION_DATE), COLLISION_DATE >= dr[1], COLLISION_DATE <= dr[2])
     }
     
     return(data)
   }
   
-  filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) })
-  filtered_data_map    <- reactive({ apply_filters(bike_or_ped_acc_sf) })
+  # add debounce to slider so dragging doesn't fire a filter instantly
+  date_range_debounced <- reactive({ input$date_range }) %>% debounce(400)
   
-  filtered_coords <- reactive({
+  filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) }) %>%
+    bindCache(input$victim_type, input$mode, input$location_type,
+              input$collision_severity, input$county, date_range_debounced())
+  
+  filtered_data_map <- reactive({ apply_filters(bike_or_ped_acc_sf) }) %>%
+    bindCache(input$victim_type, input$mode, input$location_type,
+              input$collision_severity, input$county, date_range_debounced())
+
+  output$cluster_warning <- renderUI({
     data <- filtered_data_map()
-    if (nrow(data) == 0) return(NULL)
-    coords_matrix <- st_coordinates(data)
-    data %>% st_drop_geometry() %>% mutate(lng = coords_matrix[, 1], lat = coords_matrix[, 2])
+    req(nrow(data) > 50000)
+    
+    div(
+      style = "font-family: monospace; font-size: 0.75rem; color: #7A5205; background: #FCF1DA; padding: 10px; margin-top: 12px; border: 1px solid #F5E0B7; border-radius:3px;",
+      "Clusters only display below 50,000 points. Current selection is ",
+      scales::comma(nrow(data)),
+      " points."
+    )
   })
   
   output$range_warning <- renderUI({
@@ -578,19 +799,17 @@ server <- function(input, output, session) {
           annotations = list(text = "No metrics matched selected arguments.", showarrow = FALSE, font = list(family = "monospace", size = 12, color = brand$muted))
         )
     } else {
-      plot_data <- data %>% {if ("geometry" %in% names(.)) st_drop_geometry(.) else .} %>% filter(!is.na(COLLISION_DATE))
+      plot_data <- data %>% filter(!is.na(COLLISION_DATE))  # no more st_drop_geometry needed 
       
       if (input$granularity == "year") {
         summary_data <- plot_data %>%
-          mutate(ACCIDENT_PERIOD = lubridate::year(COLLISION_DATE)) %>%
-          group_by(ACCIDENT_PERIOD) %>%
+          group_by(ACCIDENT_PERIOD = year) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
           arrange(ACCIDENT_PERIOD)
         x_title <- "year"
       } else {
         summary_data <- plot_data %>%
-          mutate(ACCIDENT_PERIOD = lubridate::floor_date(COLLISION_DATE, "month")) %>%
-          group_by(ACCIDENT_PERIOD) %>%
+          group_by(ACCIDENT_PERIOD = month) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
           arrange(ACCIDENT_PERIOD)
         x_title <- "month"
@@ -600,62 +819,100 @@ server <- function(input, output, session) {
         add_trace(
           y = ~Total_Accidents, 
           type = "bar", 
-          name = "Incidents", 
-          marker = list(color = brand$muted, line = list(color = "white", width = 0.5)),
-          hoverinfo = "text",
-          text = ~paste0("Period: ", ACCIDENT_PERIOD, "<br>Incidents: ", Total_Accidents)
+          name = "Incidents",
+          marker = list(color = brand$muted)
         ) %>%
         layout(
           margin = list(t = 10, b = 40, l = 40, r = 10),
           xaxis = list(title = x_title, showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
           yaxis = list(title = "incident count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
-          hovermode = "x unified",
           plot_bgcolor  = "rgba(0,0,0,0)",
           paper_bgcolor = "rgba(0,0,0,0)"
         )
     }
   })
   
-    # Base map — render ONCE, no reactive dependency on filters
     output$map <- renderLeaflet({
       leaflet(options = leafletOptions(attributionControl = FALSE)) %>%
         addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
         addPolygons(
           data = ca_boundary,
           fillColor = "transparent", color = brand$ink,
-          weight = 1.2, opacity = 0.4, group = "California"
+          weight = 1.2, opacity = 0.4
         ) %>%
         addLayersControl(
-          overlayGroups = c("California", "Accident Heatmap", "Accident Clusters"),
+          overlayGroups = c("Accident Heatmap", "Accident Clusters"),
           options = layersControlOptions(collapsed = TRUE)
-        ) %>%
-        hideGroup("Accident Clusters")
+        )
+    })
+    severity_labels <- c(
+      "Fatal Injury" = "1",
+      "Serious Injury" = "2",
+      "Minor Injury" = "3",
+      "Complaint of Pain" = "4"
+    )
+    observe({
+      updateSelectInput(session, "collision_severity",
+                        choices = c("All" = "All", severity_labels),
+                        selected = "All"
+      )
+      updateSelectInput(session, "county",
+                        choices = c("All", sort(unique(na.omit(bike_or_ped_acc_all$COUNTY)))),
+                        selected = "All"
+      )
     })
     
-    # Updates — driven by filters, patch the existing map via proxy
     observe({
-      coords <- filtered_coords()
+      coords <- filtered_data_map()
       proxy <- leafletProxy("map") %>%
         clearHeatmap() %>%
-        clearMarkerClusters() %>%
         clearGroup("Accident Heatmap") %>%
-        clearGroup("Accident Clusters")
+        clearGroup("Accident Clusters") %>%
+        clearGlLayers()
       
-      if (!is.null(coords) && nrow(coords) > 0) {
-        proxy %>%
+      if (nrow(coords) > 0) {
+        coords_sf <- st_as_sf(coords, coords = c("lng", "lat"), crs = 4326, remove = FALSE)
+        
+        proxy <- proxy %>%
           addHeatmap(
             data = coords, lng = ~lng, lat = ~lat,
             blur = 22, max = 0.04, radius = 11,
             gradient = c("0.4" = "#64748B", "0.65" = "#1C2541", "0.85" = "#0A1128", "1.0" = "#DC2626"),
             group = "Accident Heatmap"
-          ) %>%
-          addCircleMarkers(
+          )
+        
+        if (nrow(coords) <= 50000) {
+          proxy %>% addCircleMarkers(
             data = coords, lng = ~lng, lat = ~lat,
             radius = 3, stroke = TRUE, color = "white", weight = 0.5,
             fillColor = brand$navy, fillOpacity = 0.4,
-            group = "Accident Clusters",
-            clusterOptions = markerClusterOptions()
+            clusterOptions = markerClusterOptions(),
+            group = "Accident Clusters"
           )
+        }
+      }
+    })
+    observe({
+      proxy <- leafletProxy("map")
+      
+      if (input$county == "All") {
+        bbox <- st_bbox(ca_boundary)
+        proxy %>% flyToBounds(
+          lng1 = bbox[["xmin"]], lat1 = bbox[["ymin"]],
+          lng2 = bbox[["xmax"]], lat2 = bbox[["ymax"]]
+        )
+      } else {
+        county_data <- bike_or_ped_acc_sf %>% filter(COUNTY == input$county)
+        
+        if (nrow(county_data) > 0) {
+          lng_range <- quantile(county_data$lng, probs = c(0.01, 0.99), na.rm = TRUE)
+          lat_range <- quantile(county_data$lat, probs = c(0.01, 0.99), na.rm = TRUE)
+          
+          proxy %>% flyToBounds(
+            lng1 = lng_range[[1]], lat1 = lat_range[[1]],
+            lng2 = lng_range[[2]], lat2 = lat_range[[2]]
+          )
+        }
       }
     })
 }
