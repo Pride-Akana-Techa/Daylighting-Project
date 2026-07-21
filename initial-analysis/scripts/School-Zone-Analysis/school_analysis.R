@@ -1,3 +1,13 @@
+# -------------------------------------------------------------------------
+## This script categorizes pedestrian crashes into school zones and non school    zone areas, and visualizes the crash trends in these two categories.
+
+# -------------------------------------------------------------------------
+
+
+
+# Set Up ------------------------------------------------------------------
+
+# Load packages
 library(sf)
 library(here)
 library(ggplot2)
@@ -21,6 +31,8 @@ buffer <- buffer_ft * 0.3048
 school_zones <- st_buffer(public_schools, dist = buffer)
 school_zones_union <- st_union(school_zones)
 
+
+# Group crashes into school zones and non-school zones
 crashes_analyzed <- crashes |>
   mutate(
     crash_date = as.Date(COLLISION_DATE), 
@@ -32,6 +44,8 @@ crashes_analyzed <- crashes |>
     )
   )
 
+# Save the dataset
+saveRDS(crashes_analyzed, "initial-analysis/data-clean/school_data.rds")
 
 # aggregate by month
 monthly_trends <- crashes_analyzed |>

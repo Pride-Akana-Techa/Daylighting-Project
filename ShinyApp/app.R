@@ -676,6 +676,10 @@ methodology_page <- div(
       title = "RDiT Model",
       value = "rdit",
       
+<<<<<<< HEAD
+=======
+      
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
       # MODEL SPECIFICATION  -----------------
       div(
         class = "document-card",
@@ -746,6 +750,10 @@ methodology_page <- div(
           )
         )
       ),
+<<<<<<< HEAD
+=======
+      
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
       # DATA SOURCE ------------------------------------------------------
       div(
         class = "document-card",
@@ -756,6 +764,10 @@ methodology_page <- div(
           style = "color: var(--brand-ink); line-height: 1.7;"
         )
       ),
+<<<<<<< HEAD
+=======
+      
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
       # 4. BANDWIDTH & KERNEL SELECTION -------------------------------------
       div(
         class = "document-card",
@@ -765,6 +777,10 @@ methodology_page <- div(
           style = "color: var(--brand-ink); line-height: 1.7;"
         )
       ),
+<<<<<<< HEAD
+=======
+      
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
       # 5. ROBUSTNESS & VALIDITY CHECKS -------------------------------------
       div(
         class = "document-card",
@@ -776,9 +792,17 @@ methodology_page <- div(
         tags$ul(
           style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
           tags$li(tags$strong("Placebo cutoffs. "), "We re-ran the same RDiT specification at dates with no policy meaning: January 2016, 2017, and 2018, to confirm the model does not estimate a jump at arbitrary dates."),
+<<<<<<< HEAD
           tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
         )
       ),
+=======
+          
+          tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
+        )
+      ),
+      
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
       # 6. HETEROGENEITY TESTS ----------------------------------------------
       div(
         class = "document-card",
@@ -822,6 +846,10 @@ results_page <- div(
       "The table and figure below report the primary statewide estimates, using our standardized specification (bandwidth h = 12 months, triangular kernel, linear polynomial) at each cutoff.",
       style = "color: var(--brand-ink); line-height: 1.7;"
     ),
+<<<<<<< HEAD
+=======
+    
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
     # Results table
     tags$table(
       class = "var-table",
@@ -839,8 +867,15 @@ results_page <- div(
         )
       )
     ),
+<<<<<<< HEAD
     # RD plot placeholder
     plotOutput("statewide_rd_plot"),
+=======
+    
+    # RD plot placeholder
+    plotOutput("statewide_rd_plot"),
+    
+>>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
     p(
       "Both estimates use the robust bias-corrected inference approach from Cattaneo, Idrobo & Titiunik, which is the estimator we treat as authoritative for significance testing (see Methodology).",
       style = "color: var(--brand-muted); font-size: 0.9rem; line-height: 1.7;"

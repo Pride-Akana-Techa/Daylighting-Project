@@ -43,8 +43,7 @@ placebo_model1 <- rdrobust(y = placebo_data1$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 18,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "uniform")
 
 summary(placebo_model1)
 
@@ -110,8 +109,7 @@ placebo_model2 <- rdrobust(y = placebo_data2$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "triangular")
 
 summary(placebo_model2)
 
@@ -127,7 +125,7 @@ placebo_out2 <- rdplot(y = placebo_data2$Crash_adj2,
                        c = 0,
                        p = 1,
                        h = 24,
-                       kernel = "uniform",
+                       kernel = "triangular",
                        nbins = c(24, 24))
 
 placebo_out2$rdplot +
@@ -175,8 +173,7 @@ placebo_model3 <- rdrobust(y = placebo_data3$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "triangular")
 
 summary(placebo_model3)
 
@@ -241,8 +238,7 @@ placebo_model4 <- rdrobust(y = placebo_data4$Total_crashes,
                            c = 0,
                            p = 1,
                            h = 24,
-                           kernel = "uniform",
-                           bwselect = "mserd")
+                           kernel = "triangular")
 
 summary(placebo_model4)
 
@@ -258,7 +254,7 @@ placebo_out4 <- rdplot(y = placebo_data4$Crash_adj4,
                        c = 0,
                        p = 1,
                        h = 24,
-                       kernel = "uniform",
+                       kernel = "triangular",
                        nbins = c(24, 24))
 
 placebo_out4$rdplot +
