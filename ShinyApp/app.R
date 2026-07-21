@@ -135,8 +135,8 @@ app_theme <- bs_theme(
     .document-card {
       background: #FFFFFF;
       border-top: 2px solid var(--brand-navy);
-      padding: 24px 0;
-      margin-bottom: 32px;
+      padding: 12px 0;
+      margin-bottom: 16px;
     }
     .document-card-title {
       font-size: 0.82rem;
@@ -529,12 +529,15 @@ methodology_page <- div(
     nav_panel(
       title = "RDiT Model",
       value = "rdit",
+      
+      
+      # MODEL SPECIFICATION  -----------------
       div(
         class = "document-card",
         div(class = "document-card-title", "Regression Discontinuity in Time"),
         p(
-          "To estimate the causal effect of the enforcement AB 413 on crash frequency, we implement a sharp Regression Discontinuity in Time (RDiT) design using the ",
-          tags$code("rdrobust"), " package. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with the each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
+          "To estimate the causal effect of the implementation of AB 413 on crash frequency, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
+          tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
           style = "color: var(--brand-ink); line-height: 1.7;"
         ),
         div(
@@ -598,7 +601,63 @@ methodology_page <- div(
             )
           )
         )
-      )
+      ),
+      
+      # DATA SOURCE ------------------------------------------------------
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "Data Source"),
+        p(
+          "Crash data comes from the Transportation Injury Mapping System (TIMS), filtered to pedestrian-involved collisions at intersections. ",
+          "Each observation is aggregated to a monthly count, with separate datasets built around each cutoff date to allow the pre- and post-period windows to be sized independently.",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        )
+      ),
+      
+      # 4. BANDWIDTH & KERNEL SELECTION -------------------------------------
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "Bandwidth & Kernel Selection"),
+        p(
+          "Because the RD estimate can be sensitive to the number of data points on either side of the cutoff, we tested a range of bandwidths and kernel choices and selected the specification that produced the most stable, lowest-variance estimates. See the Results page for the comparison across bandwidths.",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        )
+      ),
+      
+      # 5. ROBUSTNESS & VALIDITY CHECKS -------------------------------------
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "Robustness & Validity Checks"),
+        p(
+          "To make sure the estimated result reflects the true effect of the policy, we ran the following checks:",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        ),
+        tags$ul(
+          style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
+          tags$li(tags$strong("Placebo cutoffs. "), "We re-ran the same RDiT specification at dates with no policy meaning: January 2016, 2017, and 2018, to confirm the model does not estimate a jump at arbitrary dates."),
+          
+          tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
+        )
+      ),
+      
+      # 6. HETEROGENEITY TESTS ----------------------------------------------
+      div(
+        class = "document-card",
+        div(class = "document-card-title", "Heterogeneity Analysis"),
+        p(
+          "With the understanding that a policy's effect on safety may not be uniform across different categories such as lighting condition and collision severity, we re-estimate the RDiT model separately within subgroups rather than assuming one effect applies everywhere:",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        ),
+        tags$ul(
+          style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
+          tags$li(tags$strong("By lighting condition. "), "Daylight vs. dark-time crashes, to test whether the effect concentrates in low-visibility conditions where daylighting theoretically matters most."),
+          tags$li(tags$strong("By crash severity. "), "Fatal, suspected serious injury, suspected minor injury, and possible injury/complaint of pain, to test whether the policy affects crash frequency broadly or is concentrated in specific outcomes.")
+        ),
+        p(
+          "Each subgroup uses the same specification and cutoff dates as the primary model, applied to a filtered outcome variable. Full results for each subgroup are reported on the Results page.",
+          style = "color: var(--brand-ink); line-height: 1.7;"
+        )
+      ),
     ),
     
     nav_panel(
@@ -614,12 +673,45 @@ methodology_page <- div(
 )
 
 
-
 results_page <- div(
   class = "page-content", 
-  h1(class = "page-title", "Results"), 
-  p("epic results", 
-    style = "color: var(--brand-muted);"))
+  h1(class = "page-title", "Results"),
+  # Placeholder structure — swap in your actual output
+  div(
+    class = "document-card",
+    div(class = "document-card-title", "Statewide RDiT Results"),
+    p(
+      "The table and figure below report the primary statewide estimates, using our standardized specification (bandwidth h = 12 months, triangular kernel, linear polynomial) at each cutoff.",
+      style = "color: var(--brand-ink); line-height: 1.7;"
+    ),
+    
+    # Results table
+    tags$table(
+      class = "var-table",
+      tags$thead(
+        tags$tr(
+          tags$th("Cutoff"), tags$th("Estimate (τ)"), tags$th("Std. Error"), tags$th("p-value")
+        )
+      ),
+      tags$tbody(
+        tags$tr(
+          tags$td("January 2024 (passage)"), tags$td("−77.6"), tags$td("[SE]"), tags$td("0.021")
+        ),
+        tags$tr(
+          tags$td("January 2025 (enforcement)"), tags$td("−62.1"), tags$td("[SE]"), tags$td("0.023")
+        )
+      )
+    ),
+    
+    # RD plot placeholder
+    plotOutput("statewide_rd_plot"),
+    
+    p(
+      "Both estimates use the robust bias-corrected inference approach from Cattaneo, Idrobo & Titiunik, which is the estimator we treat as authoritative for significance testing (see Methodology).",
+      style = "color: var(--brand-muted); font-size: 0.9rem; line-height: 1.7;"
+    )
+  ))
+
 about_page   <- div(
   class = "page-content", 
   h1(class = "page-title", "About Us"), p("Pide Akana Techa Kyle Klemba", 
