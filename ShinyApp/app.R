@@ -427,7 +427,7 @@ overview_page <- div(
     )
   )
   
-
+  
 )
 
 literature_page <- div(
@@ -487,7 +487,7 @@ maps_page <- div(
             sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
           )
         )
-      
+        
       ),
       div(class = "section-eyebrow", "aggregation controls"),
       div(
@@ -754,8 +754,8 @@ ui <- page_fluid(
       )
     ),
     
-
-      tags$main(
+    
+    tags$main(
       class = "app-main",
       
       navset_hidden(
@@ -854,7 +854,7 @@ server <- function(input, output, session) {
   filtered_data_map <- reactive({ apply_filters(bike_or_ped_acc_sf) }) %>%
     bindCache(input$victim_type, input$mode, input$location_type,
               input$collision_severity, input$county, date_range_debounced())
-
+  
   output$cluster_warning <- renderUI({
     data <- filtered_data_map()
     req(nrow(data) > 50000)
@@ -869,8 +869,8 @@ server <- function(input, output, session) {
   
   output$range_warning <- renderUI({
     req(input$granularity == "year")
-    start_partial <- format(as.Date(input$date_range[1]), "%m-%d") != "01-01"
-    end_partial   <- format(as.Date(input$date_range[2]), "%m-%d") != "12-31"
+    start_partial <- format(as.Date(input$date_range[1]), "%m") != "01"
+    end_partial   <- format(as.Date(input$date_range[2]), "%m") != "12"
     
     if (start_partial || end_partial) {
       div(
@@ -880,8 +880,8 @@ server <- function(input, output, session) {
     } else { NULL }
   })
   
-
-    output$main_plot <- renderPlotly({
+  
+  output$main_plot <- renderPlotly({
     data <- filtered_data_graph()  
     
     if (nrow(data) == 0) {
@@ -924,89 +924,101 @@ server <- function(input, output, session) {
     }
   })
   
-    output$map <- renderLeaflet({
-      leaflet(options = leafletOptions(attributionControl = FALSE)) %>%
-        addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
-        addPolygons(
-          data = ca_boundary,
-          fillColor = "transparent", color = brand$ink,
-          weight = 1.2, opacity = 0.4
-        ) %>%
-        addLayersControl(
-          overlayGroups = c("Accident Heatmap", "Accident Clusters"),
-          options = layersControlOptions(collapsed = TRUE)
-        )
-    })
-    severity_labels <- c(
-      "Fatal Injury" = "1",
-      "Serious Injury" = "2",
-      "Minor Injury" = "3",
-      "Complaint of Pain" = "4"
+  output$map <- renderLeaflet({
+    leaflet(options = leafletOptions(attributionControl = FALSE)) %>%
+      addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
+      addPolygons(
+        data = ca_boundary,
+        fillColor = "transparent", color = brand$ink,
+        weight = 1.2, opacity = 0.4
+      ) %>%
+      addLayersControl(
+        overlayGroups = c("Accident Heatmap", "Accident Clusters"),
+        options = layersControlOptions(collapsed = TRUE)
+      )
+  })
+  severity_labels <- c(
+    "Fatal Injury" = "1",
+    "Serious Injury" = "2",
+    "Minor Injury" = "3",
+    "Complaint of Pain" = "4"
+  )
+  observe({
+    updateSelectInput(session, "collision_severity",
+                      choices = c("All" = "All", severity_labels),
+                      selected = "All"
     )
-    observe({
-      updateSelectInput(session, "collision_severity",
-                        choices = c("All" = "All", severity_labels),
-                        selected = "All"
-      )
-      updateSelectInput(session, "county",
-                        choices = c("All", sort(unique(na.omit(bike_or_ped_acc_all$COUNTY)))),
-                        selected = "All"
-      )
-    })
+    updateSelectInput(session, "county",
+                      choices = c("All", sort(unique(na.omit(bike_or_ped_acc_all$COUNTY)))),
+                      selected = "All"
+    )
+  })
+  
+  observe({
+    coords <- filtered_data_map()
+    proxy <- leafletProxy("map") %>%
+      clearHeatmap() %>%
+      clearGroup("Accident Heatmap") %>%
+      clearGroup("Accident Clusters") %>%
+      clearGlLayers()
     
-    observe({
-      coords <- filtered_data_map()
-      proxy <- leafletProxy("map") %>%
-        clearHeatmap() %>%
-        clearGroup("Accident Heatmap") %>%
-        clearGroup("Accident Clusters") %>%
-        clearGlLayers()
+    if (nrow(coords) > 0) {
+      coords_sf <- st_as_sf(coords, coords = c("lng", "lat"), crs = 4326, remove = FALSE)
       
-      if (nrow(coords) > 0) {
-        coords_sf <- st_as_sf(coords, coords = c("lng", "lat"), crs = 4326, remove = FALSE)
-        
-        proxy <- proxy %>%
-          addHeatmap(
-            data = coords, lng = ~lng, lat = ~lat,
-            blur = 22, max = 0.04, radius = 11,
-            gradient = c("0.4" = "#64748B", "0.65" = "#1C2541", "0.85" = "#0A1128", "1.0" = "#DC2626"),
-            group = "Accident Heatmap"
-          )
-        
-        if (nrow(coords) <= 50000) {
-          proxy %>% addCircleMarkers(
-            data = coords, lng = ~lng, lat = ~lat,
-            radius = 3, stroke = TRUE, color = "white", weight = 0.5,
-            fillColor = brand$navy, fillOpacity = 0.4,
-            clusterOptions = markerClusterOptions(),
-            group = "Accident Clusters"
-          )
-        }
-      }
-    })
-    observe({
-      proxy <- leafletProxy("map")
-      
-      if (input$county == "All") {
-        bbox <- st_bbox(ca_boundary)
-        proxy %>% flyToBounds(
-          lng1 = bbox[["xmin"]], lat1 = bbox[["ymin"]],
-          lng2 = bbox[["xmax"]], lat2 = bbox[["ymax"]]
-        )
-      } else {
-        county_data <- bike_or_ped_acc_sf %>% filter(COUNTY == input$county)
-        
-        if (nrow(county_data) > 0) {
-          lng_range <- quantile(county_data$lng, probs = c(0.01, 0.99), na.rm = TRUE)
-          lat_range <- quantile(county_data$lat, probs = c(0.01, 0.99), na.rm = TRUE)
+      proxy <- proxy %>%
+        addHeatmap(
+          data = coords,
+          lng = ~lng,
+          lat = ~lat,
+          radius = 7,
+          blur = 12,
+          max = 0.4,
+          gradient = c(
+            "0.00" = "#313695",  # dark blue
+            "0.25" = "#74add1",  # light blue
+            "0.50" = "#abd96a",  # green
+            "0.70" = "#fee08b",  # yellow
+            "0.85" = "#f46d43",  # orange
+            "1.00" = "#a50026"   # dark red
+          ),
           
-          proxy %>% flyToBounds(
-            lng1 = lng_range[[1]], lat1 = lat_range[[1]],
-            lng2 = lng_range[[2]], lat2 = lat_range[[2]]
-          )
-        }
+          group = "Accident Heatmap"
+        )
+      
+      if (nrow(coords) <= 50000) {
+        proxy %>% addCircleMarkers(
+          data = coords, lng = ~lng, lat = ~lat,
+          radius = 3, stroke = TRUE, color = "white", weight = 0.5,
+          fillColor = brand$navy, fillOpacity = 0.4,
+          clusterOptions = markerClusterOptions(),
+          group = "Accident Clusters"
+        )
       }
-    })
+    }
+  })
+  observe({
+    proxy <- leafletProxy("map")
+    
+    if (input$county == "All") {
+      bbox <- st_bbox(ca_boundary)
+      proxy %>% flyToBounds(
+        lng1 = bbox[["xmin"]], lat1 = bbox[["ymin"]],
+        lng2 = bbox[["xmax"]], lat2 = bbox[["ymax"]]
+      )
+    } else {
+      county_data <- bike_or_ped_acc_sf %>% filter(COUNTY == input$county)
+      
+      if (nrow(county_data) > 0) {
+        lng_range <- quantile(county_data$lng, probs = c(0.01, 0.99), na.rm = TRUE)
+        lat_range <- quantile(county_data$lat, probs = c(0.01, 0.99), na.rm = TRUE)
+        
+        proxy %>% flyToBounds(
+          lng1 = lng_range[[1]], lat1 = lat_range[[1]],
+          lng2 = lng_range[[2]], lat2 = lat_range[[2]]
+        )
+      }
+    }
+  })
 }
 
 # Run the app
