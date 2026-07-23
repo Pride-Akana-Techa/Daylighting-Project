@@ -27,10 +27,14 @@ library(furrr)
 
 n_cores <- 16
 
+# Fork-based parallelism: cheap, no object serialization, Linux/macOS only.
+# Swap to `multisession` if running on Windows.
 future::plan(future::multicore, workers = n_cores)
 
+# data.table's internal multithreaded aggregation
 data.table::setDTthreads(n_cores)
 
+# Cache tigris downloads to disk so repeat runs skip the network/IO wait
 options(tigris_use_cache = TRUE)
 tigris_cache_dir <- here::here("data-clean", ".tigris_cache")
 dir.create(tigris_cache_dir, showWarnings = FALSE, recursive = TRUE)
@@ -58,22 +62,17 @@ san_diego_city <- sd_cities_geo |>
 
 san_diego_city_leaflet <- st_transform(san_diego_city, 4326)
 
-leaflet() |>
-  addProviderTiles(providers$CartoDB.Positron) |>
-  addPolygons(
-    data = san_diego_city_leaflet,
-    fillColor = "lightblue",
-    fillOpacity = 0.2,
-    color = "black",
-    weight = 2
-  )
+roads <- read_sf(here("data-raw", "Roads_All_shapefile", "Roads_All.shp"))
+
 
 ## ----------------------------------------------------------------------
 ##  Hex grid
 ## ----------------------------------------------------------------------
 
-san_diego_grid <- st_make_grid(san_diego_city, cellsize = 300, square = FALSE)
-san_diego_grid_sf <- st_sf(geometry = san_diego_grid)
+san_diego_grid <- st_make_grid(san_diego_city, cellsize = 600, square = FALSE)
+san_diego_grid_sf <- st_sf(geometry = san_diego_grid) |>
+  st_filter(san_diego_city) |>
+  st_filter(roads)
 
 grid_chunks <- split(
   san_diego_grid_sf,
@@ -315,18 +314,19 @@ leaflet(grid_trends_leaflet) |>
   )
 
 ## ----------------------------------------------------------------------
-##  Getis Ord
+##  Getis Ord (Fixed with broader neighborhood)
 ## ----------------------------------------------------------------------
 
 grid_trends_sf <- grid_trends_sf |>
   dplyr::mutate(raw_change = yr_2025 - yr_2022)
 
-knn_tight <- knearneigh(centroids, k = 6) |> knn2nb()
-knn_tight_self <- include.self(knn_tight)
-weights_matrix_w6 <- nb2listw(knn_tight_self, style = "W", zero.policy = TRUE)
+knn_smooth <- knearneigh(centroids, k = 73) |> knn2nb()
+knn_smooth_self <- include.self(knn_smooth)
+
+weights_matrix_smooth <- nb2listw(knn_smooth_self, style = "W", zero.policy = TRUE)
 
 grid_trends_sf$gi_z_score <- as.numeric(
-  localG(grid_trends_sf$raw_change, weights_matrix_w6, zero.policy = TRUE)
+  localG(grid_trends_sf$raw_change, weights_matrix_smooth, zero.policy = TRUE)
 )
 
 grid_trends_sf <- grid_trends_sf |>
@@ -381,3 +381,128 @@ leaflet(grid_trends_leaflet) |>
     position = "bottomright",
     na.label = "Not Significant"
   )
+
+
+
+
+
+
+##### Getis Ord for 2023-2024 and 2024-2025 graph hotspot change comparisons 
+
+
+wide_periods <- final_panel_sf |>
+  st_drop_geometry() |>
+  dplyr::filter(ACCIDENT_YEAR %in% c(2022, 2023, 2024, 2025)) |> 
+  dplyr::select(id, ACCIDENT_YEAR, crash_count) |>
+  tidyr::pivot_wider(names_from = ACCIDENT_YEAR, names_prefix = "yr_", values_from = crash_count) |>
+  dplyr::mutate(
+    change_22_23 = yr_2023 - yr_2022, 
+    change_23_24 = yr_2024 - yr_2023,
+    change_24_25 = yr_2025 - yr_2024
+  ) |>
+  dplyr::arrange(id)
+
+grid_periods_sf <- san_diego_grid_sf |>
+  dplyr::select(id) |>
+  dplyr::right_join(wide_periods, by = "id") |>
+  dplyr::arrange(id)
+
+centroids_p <- st_centroid(grid_periods_sf)
+knn_37 <- knearneigh(centroids_p, k = 19) |> knn2nb() |> include.self()
+weights_matrix_37 <- nb2listw(knn_37, style = "W", zero.policy = TRUE)
+
+grid_periods_sf <- grid_periods_sf |>
+  dplyr::mutate(
+    # 2022 to 2023
+    z_22_23 = as.numeric(localG(change_22_23, weights_matrix_37, zero.policy = TRUE)),
+    p_22_23 = 2 * (1 - pnorm(abs(z_22_23))),
+    cat_22_23 = dplyr::case_when(
+      p_22_23 <= 0.01 &                   z_22_23 > 0 ~ 3,
+      p_22_23 <= 0.05 & p_22_23 > 0.01 & z_22_23 > 0 ~ 2, 
+      p_22_23 <= 0.10 & p_22_23 > 0.05 & z_22_23 > 0 ~ 1,
+      p_22_23 <= 0.10 & p_22_23 > 0.05 & z_22_23 < 0 ~ -1,
+      p_22_23 <= 0.05 & p_22_23 > 0.01 & z_22_23 < 0 ~ -2, 
+      p_22_23 <= 0.01 &                   z_22_23 < 0 ~ -3, 
+      TRUE ~ 0
+    ),
+    # 2023 to 2024
+    z_23_24 = as.numeric(localG(change_23_24, weights_matrix_37, zero.policy = TRUE)),
+    p_23_24 = 2 * (1 - pnorm(abs(z_23_24))),
+    cat_23_24 = dplyr::case_when(
+      p_23_24 <= 0.01 &                   z_23_24 > 0 ~ 3,
+      p_23_24 <= 0.05 & p_23_24 > 0.01 & z_23_24 > 0 ~ 2, 
+      p_23_24 <= 0.10 & p_23_24 > 0.05 & z_23_24 > 0 ~ 1,
+      p_23_24 <= 0.10 & p_23_24 > 0.05 & z_23_24 < 0 ~ -1,
+      p_23_24 <= 0.05 & p_23_24 > 0.01 & z_23_24 < 0 ~ -2, 
+      p_23_24 <= 0.01 &                   z_23_24 < 0 ~ -3, 
+      TRUE ~ 0
+    ),
+    # 2024 to 2025 
+    z_24_25 = as.numeric(localG(change_24_25, weights_matrix_37, zero.policy = TRUE)),
+    p_24_25 = 2 * (1 - pnorm(abs(z_24_25))),
+    cat_24_25 = dplyr::case_when(
+      p_24_25 <= 0.01 &                   z_24_25 > 0 ~ 3,
+      p_24_25 <= 0.05 & p_24_25 > 0.01 & z_24_25 > 0 ~ 2, 
+      p_24_25 <= 0.10 & p_24_25 > 0.05 & z_24_25 > 0 ~ 1,
+      p_24_25 <= 0.10 & p_24_25 > 0.05 & z_24_25 < 0 ~ -1,
+      p_24_25 <= 0.05 & p_24_25 > 0.01 & z_24_25 < 0 ~ -2, 
+      p_24_25 <= 0.01 &                   z_24_25 < 0 ~ -3, 
+      TRUE ~ 0
+    )
+  )
+
+counts_hs1 <- grid_periods_sf |>
+  st_drop_geometry() |>
+  dplyr::count(cat_22_23, cat_23_24) |>
+  tidyr::complete(cat_22_23 = -3:3, cat_23_24 = -3:3, fill = list(n = 0)) |>
+  dplyr::mutate(
+    label_x = factor(cat_22_23, levels = 3:-3, labels = c("Hot (99%)","Hot (95%)","Hot (90%)","Neutral","Cold (90%)","Cold (95%)","Cold (99%)")),
+    label_y = factor(cat_23_24, levels = 3:-3, labels = c("Hot (99%)","Hot (95%)","Hot (90%)","Neutral","Cold (90%)","Cold (95%)","Cold (99%)"))
+  )
+
+ggplot(counts_hs1, aes(x = label_x, y = label_y, fill = n)) + 
+  geom_tile(color = "white", lwd = 1.5) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b", trans = "pseudo_log", label = scales::comma) +
+  geom_vline(xintercept = "Neutral", linetype = "dashed") +
+  geom_hline(yintercept = "Neutral", linetype = "dashed") +
+  labs(title = "Hotspot (2022-23 to 2023-24)", subtitle = "k = 19", x = "2022 to 2023", y = "2023 to 2024", fill = "Hexagons") +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+counts_raw1 <- grid_periods_sf |> st_drop_geometry() |> dplyr::count(change_22_23, change_23_24)
+
+ggplot(counts_raw1, aes(x = change_22_23, y = change_23_24, fill = n)) +
+  geom_tile(color = "white", lwd = 1.5) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b", trans = "log10", label = scales::comma) +
+  geom_vline(xintercept = 0, color = "black", lwd = 0.8) +
+  geom_hline(yintercept = 0, color = "black", lwd = 0.8) +
+  labs(title = "Raw Change (2022-23 to 2023-24)", x = "Crash Change (2022 to 2023)", y = "Crash Change (2023 to 2024)", fill = "Hexagons") +
+  theme_minimal()
+
+counts_hs2 <- grid_periods_sf |>
+  st_drop_geometry() |>
+  dplyr::count(cat_23_24, cat_24_25) |>
+  tidyr::complete(cat_23_24 = -3:3, cat_24_25 = -3:3, fill = list(n = 0)) |>
+  dplyr::mutate(
+    label_x = factor(cat_23_24, levels = 3:-3, labels = c("Hot (99%)","Hot (95%)","Hot (90%)","Neutral","Cold (90%)","Cold (95%)","Cold (99%)")),
+    label_y = factor(cat_24_25, levels = 3:-3, labels = c("Hot (99%)","Hot (95%)","Hot (90%)","Neutral","Cold (90%)","Cold (95%)","Cold (99%)"))
+  )
+
+ggplot(counts_hs2, aes(x = label_x, y = label_y, fill = n)) + 
+  geom_tile(color = "white", lwd = 1.5) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b", trans = "pseudo_log", label = scales::comma) +
+  geom_vline(xintercept = "Neutral", linetype = "dashed") +
+  geom_hline(yintercept = "Neutral", linetype = "dashed") +
+  labs(title = "Hotspot Transitions (2023-24 to 2024-25)", subtitle = "k = 19", x = "2023 to 2024", y = "2024 to 2025", fill = "Hexagons") +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+counts_raw2 <- grid_periods_sf |> st_drop_geometry() |> dplyr::count(change_23_24, change_24_25)
+
+ggplot(counts_raw2, aes(x = change_23_24, y = change_24_25, fill = n)) +
+  geom_tile(color = "white", lwd = 1.5) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b", trans = "log10", label = scales::comma) +
+  geom_vline(xintercept = 0, color = "black", lwd = 0.8) +
+  geom_hline(yintercept = 0, color = "black", lwd = 0.8) +
+  labs(title = "Raw Change (2023-24 vs 2024-25)", x = "Crash Change (2023 to 2024)", y = "Crash Change (2024 to 2025)", fill = "Hexagons") +
+  theme_minimal()
+
+
