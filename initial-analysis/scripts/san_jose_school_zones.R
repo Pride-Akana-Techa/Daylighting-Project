@@ -55,3 +55,17 @@ san_jose_monthly_crashes <- schoolzone_crashes |>
     zone_label = if_else(in_school_zone, "School Zone (Within 500ft)", "Control (Outside School Zone)"),
     zone_number = if_else(in_school_zone, 1, 0))
     
+ped_crashes <- schoolzones_crashes|>
+  filter(PEDESTRIAN_ACCIDENT =="Y")
+
+# there are not that many pedestrian observations ngl 
+
+san_jose_ped_monthly_crashes <- ped_crashes |>
+  st_drop_geometry() |>
+  mutate(month_date = floor_date(as.Date(COLLISION_DATE), "month")) |>
+  filter(year(month_date) >= 2021 & year(month_date) <= 2025) |> 
+  group_by(month_date, in_school_zone) |>
+  summarise(crashes = n(), .groups = "drop") |>
+  mutate(
+    zone_label = if_else(in_school_zone, "School Zone (Within 500ft)", "Control (Outside School Zone)"),
+    zone_number = if_else(in_school_zone, 1, 0))
