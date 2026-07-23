@@ -604,7 +604,6 @@ no_ped_rd_out2$rdplot +
 ## Combined Model
 
 h <- 12
-nudge_days <- 5
 
 make_ci_band <- function(data, y_var, side_filter, xseq) {
   d <- data |> filter(side_filter(Time))
@@ -625,13 +624,13 @@ xseq_right <- seq(0, 12, length.out = 100)
 ci_2024 <- bind_rows(
   make_ci_band(no_ped_data, "Crash_adj", function(t) t < 0, xseq_left),
   make_ci_band(no_ped_data, "Crash_adj", function(t) t >= 0, xseq_right)
-) |> mutate(Date = as.Date("2024-01-01") + Time * 30.4368 - nudge_days,
+) |> mutate(Date = as.Date("2024-01-01") + Time * 30.4368,
             Model = "Jan 2024 Cutoff")
 
 ci_2025 <- bind_rows(
   make_ci_band(no_ped_data2, "Crash_adj", function(t) t < 0, xseq_left),
   make_ci_band(no_ped_data2, "Crash_adj", function(t) t >= 0, xseq_right)
-) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368 + nudge_days,
+) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368,
             Model = "Jan 2025 Cutoff")
 
 
