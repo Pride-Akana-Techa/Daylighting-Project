@@ -16,17 +16,19 @@ library(here)
 library(htmlwidgets)
 library(leafgl)
 library(leaflet.extras)
+library(rdrobust)
+library(patchwork)
 
 # Palette
 brand <- list(
-  navy       = "#0A1128",   # text headings / rules
-  ink        = "#1C2541",   # narrative text
-  muted      = "#64748B",   # metadata labels
-  surface    = "#F8FAFC",   
-  border     = "#E2E8F0",   
-  highlight  = "#EEF2F6",
+  navy       = "#003B5C",   # deep blue — headings, borders, primary elements
+  ink        = "#1C2B33",   # dark blue-charcoal — body text (complements navy)
+  muted      = "#5A7381",   # steel blue-gray — metadata labels
+  surface    = "#F7FAFB",   # cool off-white
+  border     = "#DCE6EA",   # light blue-gray border
+  highlight  = "#EAF1F4",   # soft blue highlight
   link       = "#F5ECD7",
-  accent     = "#DC2626"    
+  accent     = "#C16200"    # burnt orange
 )
 app_theme <- bs_theme(
   version      = 5,
@@ -164,10 +166,10 @@ app_theme <- bs_theme(
     .app-shell { display: flex; min-height: 100vh; align-items: stretch; }
 
     /* sidebar */
-    .app-sidebar {
-      width: 320px;
-      flex: 0 0 320px;
-      background: #1E2A47;
+      .app-sidebar {
+      width: 250px;
+      flex: 0 0 250px;
+      background: #003B5C;   
       border-right: 1px solid var(--brand-border);
       display: flex;
       flex-direction: column;
@@ -205,24 +207,26 @@ app_theme <- bs_theme(
       background-color: var(--brand-highlight);
     }
 
-    .app-main { flex: 1 1 auto; min-width: 0; padding: 56px 72px; position: relative; }
+    .app-main { flex: 1 1 auto; min-width: 0; padding: 0px 40px; position: relative; }
 
     /* typographics */
     .section-eyebrow {
-      text-transform: lowercase;
-      font-family: monospace;
-      font-size: 0.8rem;
-      color: var(--brand-muted);
-      margin-bottom: 8px;
-      letter-spacing: 0.05em;
-    }
+  text-transform: uppercase;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--brand-navy);
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
     .right-aligned-eyebrow {
-      text-align: right;
-      text-transform: lowercase;
-      font-family: monospace;
-      font-size: 0.8rem;
-      color: var(--brand-muted);
-    }
+  text-align: right;
+  text-transform: uppercase;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--brand-navy);
+}
 
     .page-title {
       font-weight: 400;
@@ -232,23 +236,31 @@ app_theme <- bs_theme(
       letter-spacing: -0.02em;
       line-height: 1.2;
     }
+    
+    .tab-content {
+  margin-top: 28px;
+}
 
-    /* Structured layout cards */
     .document-card {
-      background: #FFFFFF;
-      border-top: 2px solid var(--brand-navy);
-      padding: 12px 0;
-      margin-bottom: 16px;
-    }
+  background: var(--brand-surface);
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--card-accent, var(--brand-navy));
+}
+
     .document-card-title {
-      font-size: 0.82rem;
-      font-family: monospace;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--brand-muted);
-      margin-bottom: 16px;
-    }
-    .double-hr {
+  font-size: 0.95rem;
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand-navy);
+  margin-top: 0;        
+  margin-bottom: 16px;
+}
+
+        .double-hr {
       border-top: 3px double var(--brand-border);
       margin: 40px 0 16px 0;
     }
@@ -259,16 +271,18 @@ app_theme <- bs_theme(
       margin-bottom: 24px;
     }
     .register-header {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--brand-border);
-      background: var(--brand-surface);
-      font-family: monospace;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      color: var(--brand-muted);
-    }
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--brand-border);
+  background: var(--brand-surface);
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand-navy);
+}
     .register-row {
       display: flex;
       justify-content: space-between;
@@ -331,42 +345,111 @@ app_theme <- bs_theme(
       border-top: 1px solid var(--brand-border);
       border-bottom: 1px solid var(--brand-border);
     }
-    .var-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.88rem;
-    }
-    .var-table thead th {
-      text-align: left;
-      font-family: 'Inter', sans-serif;
-      font-weight: 700;
-      font-size: 0.8rem;
-      color: var(--brand-ink);
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--brand-border);
-    }
-    .var-table tbody td {
-      padding: 12px 16px;
-      vertical-align: top;
-      color: var(--brand-ink);
-      border-bottom: 1px solid var(--brand-highlight);
-    }
-    .var-table tbody tr:nth-child(odd) {
-      background-color: var(--brand-surface);
-    }
-    .var-table .var-name {
-      font-family: 'Playfair Display', serif;
-      font-style: italic;
-      white-space: nowrap;
-      color: var(--brand-navy);
-    }
-    .var-table .var-role {
-      color: var(--brand-muted);
-      font-family: monospace;
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
+    
+   .var-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  background-color: #FFFFFF;
+  border: 1px solid var(--brand-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.var-table thead th {
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--brand-ink);
+  padding: 12px 16px;
+  background-color: var(--brand-highlight);
+  border-bottom: 1px solid var(--brand-border);
+}
+.var-table tbody td {
+  padding: 12px 16px;
+  vertical-align: top;
+  color: var(--brand-ink);
+  border-bottom: 1px solid var(--brand-highlight);
+}
+.var-table tbody tr:nth-child(even) {
+  background-color: var(--brand-highlight);
+}
+.var-table .var-name {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  white-space: nowrap;
+  color: var(--brand-navy);
+}
+.var-table .var-role {
+  color: var(--brand-muted);
+  font-family: monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+    
+    .results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  background-color: #FFFFFF;   
+  border: 1px solid var(--brand-border);   
+  border-radius: 6px;   
+  overflow: hidden;   
+}
+.results-table thead th {
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--brand-ink);
+  padding: 12px 16px;
+  background-color: var(--brand-highlight);   
+  border-bottom: 1px solid var(--brand-border);
+}
+.results-table tbody td {
+  padding: 12px 16px;
+  vertical-align: top;
+  color: var(--brand-ink);
+  border-bottom: 1px solid var(--brand-highlight);
+}
+.results-table tbody tr:nth-child(even) {
+  background-color: var(--brand-highlight); 
+}
+
+.results-table .cutoff-name {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  color: var(--brand-navy);
+  white-space: nowrap;
+}
+.results-table .sig-stars {
+  color: var(--brand-accent);
+  font-weight: 700;
+  margin-left: 2px;
+}
+.results-table-note {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--brand-accent);   
+  margin-top: 12px;
+  line-height: 1.6;
+}
+
+.results-table .group-cell {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  color: var(--brand-navy);
+  vertical-align: middle;
+  border-right: 1px dashed var(--brand-border);
+}
+.results-table .subgroup-cell {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  color: var(--brand-ink);
+  vertical-align: middle;
+  border-right: 1px dashed var(--brand-border);
+}
 
     @media (max-width: 950px) {
       .app-shell { flex-direction: column; }
@@ -376,9 +459,11 @@ app_theme <- bs_theme(
       .app-main { padding: 32px 24px; }
     }
   "))
-    
 
-# Load Data ---------------------------------------------------------------
+
+# ==========================================================================
+# Load Data
+# ==========================================================================
 
 ca_boundary   <- readRDS("shiny-data/ca_boundary.rds")
 bike_or_ped_acc_all <- readRDS("shiny-data/TIMS_bike_ped_all.rds")
@@ -412,6 +497,138 @@ if (!dir.exists("www")) dir.create("www")
 html_path <- file.path(normalizePath("www", mustWork = TRUE), "literature_review.html")
 
 includeHTML("www/literature_review.html")
+
+
+# ==========================================================================
+# RDiT Model Fitting 
+# ==========================================================================
+
+tims_crashes <- readRDS("shiny-data/TIMS_Filtered.rds")
+
+# --- Jan 2024 cutoff (2-year span) ---------------------------------------
+two_year_rdit <- tims_crashes |>
+  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |>
+  filter(PED_ACTION == "B" & INTERSECTION == "Y") |>
+  mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
+         Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
+         Post = ifelse(Time >= 0, 1, 0),
+         Season_factor = factor(
+           case_when(
+             month(MONTH) %in% c(12, 1, 2) ~ "Winter",
+             month(MONTH) %in% c(3, 4, 5) ~ "Spring",
+             month(MONTH) %in% c(6, 7, 8) ~ "Summer",
+             month(MONTH) %in% c(9, 10, 11) ~ "Fall"
+           ),
+           levels = c("Winter", "Spring", "Summer", "Fall")
+         )) |>
+  group_by(Time, Post, Season_factor) |>
+  summarise(Total_crashes = n(), .groups = "drop")
+
+two_year_model <- rdrobust(
+  y = two_year_rdit$Total_crashes,
+  x = two_year_rdit$Time,
+  covs = model.matrix(~ Season_factor, two_year_rdit)[, -1],
+  c = 0, p = 1, h = 12, kernel = "triangular"
+)
+
+seasonal_model <- lm(Total_crashes ~ Season_factor, data = two_year_rdit)
+two_year_rdit$Crash_adj <- resid(seasonal_model) + mean(two_year_rdit$Total_crashes)
+
+# --- Jan 2025 cutoff -------------------------------------------------------
+rdit_data3 <- tims_crashes |>
+  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |>
+  filter(PED_ACTION == "B" & INTERSECTION == "Y") |>
+  mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
+         Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
+         Post = ifelse(Time >= 0, 1, 0),
+         Season_factor = factor(
+           case_when(
+             month(MONTH) %in% c(12, 1, 2) ~ "Winter",
+             month(MONTH) %in% c(3, 4, 5) ~ "Spring",
+             month(MONTH) %in% c(6, 7, 8) ~ "Summer",
+             month(MONTH) %in% c(9, 10, 11) ~ "Fall"
+           ),
+           levels = c("Winter", "Spring", "Summer", "Fall")
+         )) |>
+  group_by(Time, Post, Season_factor) |>
+  summarise(Total_crashes = n(), .groups = "drop")
+
+rd_model3 <- rdrobust(
+  y = rdit_data3$Total_crashes,
+  x = rdit_data3$Time,
+  covs = model.matrix(~ Season_factor, rdit_data3)[, -1],
+  c = 0, p = 1, h = 12, kernel = "triangular"
+)
+
+season_model3 <- lm(Total_crashes ~ Season_factor, data = rdit_data3)
+rdit_data3$Crash_adj3 <- resid(season_model3) + mean(rdit_data3$Total_crashes)
+
+# --- CI bands ---------------------------------------------------------------
+h <- 12
+make_ci_band <- function(data, y_var, side_filter, xseq) {
+  d <- data |> filter(side_filter(Time))
+  d$w <- (1 - abs(d$Time / h)) * (abs(d$Time / h) <= 1)
+  fit <- lm(reformulate("Time", response = y_var), data = d, weights = w)
+  pred <- predict(fit, newdata = data.frame(Time = xseq), se.fit = TRUE)
+  data.frame(
+    Time = xseq,
+    fit = pred$fit,
+    lwr = pred$fit - qt(0.975, fit$df.residual) * pred$se.fit,
+    upr = pred$fit + qt(0.975, fit$df.residual) * pred$se.fit
+  )
+}
+
+xseq_left  <- seq(-12, 0, length.out = 100)
+xseq_right <- seq(0, 12, length.out = 100)
+
+ci_2024 <- bind_rows(
+  make_ci_band(two_year_rdit, "Crash_adj", function(t) t < 0, xseq_left),
+  make_ci_band(two_year_rdit, "Crash_adj", function(t) t >= 0, xseq_right)
+) |> mutate(Date = as.Date("2024-01-01") + Time * 30.4368, Model = "Jan 2024 Cutoff")
+
+ci_2025 <- bind_rows(
+  make_ci_band(rdit_data3, "Crash_adj3", function(t) t < 0, xseq_left),
+  make_ci_band(rdit_data3, "Crash_adj3", function(t) t >= 0, xseq_right)
+) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368, Model = "Jan 2025 Cutoff")
+
+# --- Plot builder ------------------------------------------------------------
+make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
+                             event_label, x_limits, x_breaks,
+                             y_breaks = seq(100, 500, by = 50)) {
+  ggplot(ci_data) +
+    geom_ribbon(aes(x = Date, ymin = lwr, ymax = upr), fill = line_color, alpha = 0.2) +
+    geom_line(data = filter(ci_data, Time < 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_line(data = filter(ci_data, Time > 0), aes(Date, fit), color = line_color, linewidth = 1) +
+    geom_vline(xintercept = cutoff_date, linetype = "dashed", color = "black") +
+    annotate("text", x = cutoff_date, y = Inf, label = event_label,
+             vjust = 1.5, fontface = "bold", size = 4) +
+    scale_y_continuous(breaks = y_breaks) +
+    scale_x_date(date_labels = "%b %Y", limits = x_limits, breaks = x_breaks, expand = c(0.02, 0)) +
+    theme_minimal(base_size = 13) +
+    labs(title = model_label, x = "Month", y = "Crash Count") +
+    theme(plot.title = element_text(size = 16, face = "bold"),
+          axis.title.x = element_text(size = 13, face = "bold"),
+          axis.title.y = element_text(size = 13, face = "bold"),
+          axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+p_2024 <- make_cutoff_plot(
+  ci_2024, cutoff_date = as.Date("2024-01-01"),
+  model_label = "Jan 2024 Cutoff", line_color = "#003B5C",
+  event_label = "Warning Begins",
+  x_limits = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+  x_breaks = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months")
+)
+
+p_2025 <- make_cutoff_plot(
+  ci_2025, cutoff_date = as.Date("2025-01-01"),
+  model_label = "Jan 2025 Cutoff", line_color = "#C16200",
+  event_label = "Enforcement Begins",
+  x_limits = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+  x_breaks = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+)
+
+statewide_rdit_plot <- p_2024 + p_2025
 
 
 # ==========================================================================
@@ -454,8 +671,7 @@ daylighting_specimen <- function(img_src, title, description) {
     tags$div(
       class = "specimen-body",
       tags$h4(class = "specimen-title", title),
-      tags$p(class = "specimen-desc", description),
-      
+      tags$p(class = "specimen-desc", description)
     )
   )
 }
@@ -478,10 +694,9 @@ overview_page <- div(
     
     # Left Narrative Column
     div(
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "About the Law"),
-        p(
+      div(class = "document-card-title", "About the Law"),
+      div(class = "document-card",
+                p(
           p(
             "On October 10, 2023, ",
             HTML('<a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB413" target="_blank" class="text-link">California Assembly Bill 413 (AB 413)</a>'),
@@ -491,40 +706,50 @@ overview_page <- div(
             "This traffic safety practice, known as ",
             HTML("<em>daylighting</em>,"),
             " is intended to improve intersection visibility by removing vehicles that can obstruct pedestrian and driver sightlines at intersections. Derived from the architectural term for allowing for natural light into a space, daylighting as a road safety tool dates back to the 1968 Vienna Convention on Road Traffic. California was one of only a handful of states without a statewide daylighting requirement; more than 40 states already mandated some form of it. The bill was authored by Assemblymember Alex Lee (D-AD 24), co-sponsored by the California Bicycle Coalition and Streets For All, and signed into law by Governor Gavin Newsom."
-          ),
-          p(
-            "AB-413 arrives amid a pedestrian safety crisis in California. The state recorded 1,106 pedestrian fatalities in 2023 alone, and pedestrians have consistently accounted for roughly a quarter or more of all California traffic deaths."
           )
         )
-      )
-    ),
-    
-    # Right Context Column
-    div(
-      div(
-        class = "register-container",
-        div(class = "register-header", span("IMPLEMENTATION TIMELINE")),
-        div(
-          class = "register-row",
-          tags$span("Pre-enforcement"),
-          tags$small("Before Jan 2024", style = "font-family: monospace; color: #991B1B; background: #FEE2E2; padding: 2px 8px; border-radius: 2px;")
-        ),
-        div(
-          class = "register-row",
-          tags$span("Warning Phase"),
-          tags$small("Jan 2024 - Dec 2024", style = "font-family: monospace; color: #92400E; background: #FEF3C7; padding: 2px 8px; border-radius: 2px;")
-        ),
-        div(
-          class = "register-row",
-          tags$span("Citation Phase"),
-          tags$small("After Jan 2025", style = "font-family: monospace; color: #065F46; background: #D1FAE5; padding: 2px 8px; border-radius: 2px;")
-        )
+      ),
+      
+      div(class = "register-header", span("IMPLEMENTATION TIMELINE")),
+      div(class = "register-container",
+          div(
+            class = "register-row",
+            tags$span("Pre-enforcement"),
+            tags$small("Before Jan 2024", style = "font-family: monospace; color: #991B1B; background: #FEE2E2; padding: 2px 8px; border-radius: 2px;")
+          ),
+          div(
+            class = "register-row",
+            tags$span("Warning Phase"),
+            tags$small("Jan 2024 - Dec 2024", style = "font-family: monospace; color: #92400E; background: #FEF3C7; padding: 2px 8px; border-radius: 2px;")
+          ),
+          div(
+            class = "register-row",
+            tags$span("Citation Phase"),
+            tags$small("After Jan 2025", style = "font-family: monospace; color: #065F46; background: #D1FAE5; padding: 2px 8px; border-radius: 2px;")
+          )
       ),
       img(
         src = "SFA-Daylighting.jpg",
         width = "100%",
         style = "border: 1px solid var(--brand-border); opacity: 0.85; margin-top: 12px;"
+      ) 
+    ),
+    
+    # Right Context Column
+    div(
+      
+      div(class = "document-card-title", "About this project"),
+      div(class = "document-card",
+          p(
+            p(
+              "This project evaluates the impact of AB 413 on pedestrian and bicyclist safety outcomes across California using statewide crash data and advanced statistical methods. The analysis examines changes in crash patterns before and after implementation of the law, while accounting for seasonal trends, roadway characteristics, weather conditions, lighting conditions, and differences across communities. In addition to measuring the overall effect of the policy, this project explores whether impacts vary by factors such as crash severity and local implementation strategies."
+            ),
+            p(
+              "The findings from this research provide evidence on the effectiveness of daylighting policies as a transportation safety intervention and help identify where additional improvements may be needed. By combining data visualization, spatial analysis, and causal inference methods, this dashboard presents an accessible overview of the results and supports data-driven decision-making for transportation agencies, policymakers, and communities working to improve pedestrian and bicyclist safety."
+            )
+          )
       ),
+  
       tags$head(
         tags$style(HTML("
     .specimen-grid {
@@ -542,19 +767,18 @@ overview_page <- div(
 
     .specimen-grid img {
       width: 100% !important;
-      height: 220px; /* Adjust height as preferred */
+      height: 220px;
       object-fit: cover;
       border-radius: 6px 6px 0 0;
       display: block;
     }
   "))
-      
       ),
       tags$div(
         class = "document-card specimen-section",
         style = "margin-top: 16px;",
         tags$h3(
-          style = "font-family:'Playfair Display',serif; font-weight:400; font-size:1.7rem; color: var(--brand-navy); margin: 4px 0 8px 0;",
+          style = "font-family:'Playfair Display',serif; font-weight:400; font-size:1.7rem; color: var(--brand-navy); margin: 0 0 8px 0;",
           "Daylighting Types"
         ),
         tags$p(
@@ -571,7 +795,7 @@ overview_page <- div(
           daylighting_specimen(
             img_src = "seventh&island-bulbout.png",
             title = "Curb Extension (Bulb-Out)",
-            description = "DESCRIPTIOn"
+            description = "DESCRIPTION"
           ),
           daylighting_specimen(
             img_src = "haynes&laguna-hardened-bicycle.png",
@@ -668,7 +892,7 @@ maps_page <- div(
 )
 
 methodology_page <- div(
-  class = "page-content",
+  class = "page-content methodology-page",
   h1(class = "page-title", "Methodology"),
   navset_tab(
     id = "methodology_tabs",
@@ -676,15 +900,10 @@ methodology_page <- div(
       title = "RDiT Model",
       value = "rdit",
       
-<<<<<<< HEAD
-=======
-      
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-      # MODEL SPECIFICATION  -----------------
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "Regression Discontinuity in Time"),
-        p(
+      # MODEL SPECIFICATION
+      div(class = "document-card-title", "Regression Discontinuity in Time"),
+      div(class = "document-card document-card--model",
+                p(
           "To estimate the causal effect of the implementation of AB 413 on crash frequency, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
           tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
           style = "color: var(--brand-ink); line-height: 1.7;"
@@ -692,9 +911,13 @@ methodology_page <- div(
         div(
           style = "padding: 16px 0; text-align: center; font-size: 1.05rem;",
           "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
-        ),
-        div(class = "document-card-title", "Variable Definitions"),
-        div(
+        )
+      ),
+      
+      # VARIABLE DEFINITIONS
+      div(class = "document-card-title", "Variable Definitions"),
+      div(class = "document-card document-card--variable",
+                div(
           class = "var-table-wrap",
           tags$table(
             class = "var-table",
@@ -750,64 +973,44 @@ methodology_page <- div(
           )
         )
       ),
-<<<<<<< HEAD
-=======
       
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-      # DATA SOURCE ------------------------------------------------------
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "Data Source"),
-        p(
+      # DATA SOURCE
+      div(class = "document-card-title", "Data Source"),
+      div(class = "document-card document-card--data",
+                p(
           "Crash data comes from the Transportation Injury Mapping System (TIMS), filtered to pedestrian-involved collisions at intersections. ",
           "Each observation is aggregated to a monthly count, with separate datasets built around each cutoff date to allow the pre- and post-period windows to be sized independently.",
           style = "color: var(--brand-ink); line-height: 1.7;"
         )
       ),
-<<<<<<< HEAD
-=======
       
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-      # 4. BANDWIDTH & KERNEL SELECTION -------------------------------------
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "Bandwidth & Kernel Selection"),
-        p(
+      # BANDWIDTH & KERNEL SELECTION
+      div(class = "document-card-title", "Bandwidth & Kernel Selection"),
+      div(class = "document-card document-card--bandwidth",
+                p(
           "Because the RD estimate can be sensitive to the number of data points on either side of the cutoff, we tested a range of bandwidths and kernel choices and selected the specification that produced the most stable, lowest-variance estimates. See the Results page for the comparison across bandwidths.",
           style = "color: var(--brand-ink); line-height: 1.7;"
         )
       ),
-<<<<<<< HEAD
-=======
       
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-      # 5. ROBUSTNESS & VALIDITY CHECKS -------------------------------------
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "Robustness & Validity Checks"),
-        p(
+      # ROBUSTNESS & VALIDITY CHECKS
+      div(class = "document-card-title", "Robustness & Validity Checks"),
+      div(class = "document-card document-card--robustness",
+                p(
           "To make sure the estimated result reflects the true effect of the policy, we ran the following checks:",
           style = "color: var(--brand-ink); line-height: 1.7;"
         ),
         tags$ul(
           style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
           tags$li(tags$strong("Placebo cutoffs. "), "We re-ran the same RDiT specification at dates with no policy meaning: January 2016, 2017, and 2018, to confirm the model does not estimate a jump at arbitrary dates."),
-<<<<<<< HEAD
-          tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
-        )
-      ),
-=======
-          
           tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
         )
       ),
       
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-      # 6. HETEROGENEITY TESTS ----------------------------------------------
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "Heterogeneity Analysis"),
-        p(
+      # HETEROGENEITY TESTS
+      div(class = "document-card-title", "Heterogeneity Analysis"),
+      div(class = "document-card document-card--heterogeneity",
+                p(
           "With the understanding that a policy's effect on safety may not be uniform across different categories such as lighting condition and collision severity, we re-estimate the RDiT model separately within subgroups rather than assuming one effect applies everywhere:",
           style = "color: var(--brand-ink); line-height: 1.7;"
         ),
@@ -815,77 +1018,240 @@ methodology_page <- div(
           style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
           tags$li(tags$strong("By lighting condition. "), "Daylight vs. dark-time crashes, to test whether the effect concentrates in low-visibility conditions where daylighting theoretically matters most."),
           tags$li(tags$strong("By crash severity. "), "Fatal, suspected serious injury, suspected minor injury, and possible injury/complaint of pain, to test whether the policy affects crash frequency broadly or is concentrated in specific outcomes.")
-        ),
+        )
+      ),
+      
+      # CONCLUSION / CROSS-REFERENCE
+      div(class = "document-card document-card--conclusion",
         p(
           "Each subgroup uses the same specification and cutoff dates as the primary model, applied to a filtered outcome variable. Full results for each subgroup are reported on the Results page.",
           style = "color: var(--brand-ink); line-height: 1.7;"
         )
-      ),
+      )
     ),
+    
     nav_panel(
       title = "Tobit Model (Grid Analysis)",
       value = "tobit",
-      div(
-        class = "document-card",
-        div(class = "document-card-title", "Tobit Model for Spatial Grid Analysis"),
-        p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
+      div(class = "document-card-title", "Tobit Model for Spatial Grid Analysis"),
+      div(class = "document-card",
+                p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
       )
     )
   )
 )
 
-
 results_page <- div(
-  class = "page-content", 
+  class = "page-content",
   h1(class = "page-title", "Results"),
-  # Placeholder structure — swap in your actual output
-  div(
-    class = "document-card",
-    div(class = "document-card-title", "Statewide RDiT Results"),
-    p(
-      "The table and figure below report the primary statewide estimates, using our standardized specification (bandwidth h = 12 months, triangular kernel, linear polynomial) at each cutoff.",
-      style = "color: var(--brand-ink); line-height: 1.7;"
-    ),
-<<<<<<< HEAD
-=======
+  
+  navset_tab(
+    id = "results_tabs",
     
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-    # Results table
-    tags$table(
-      class = "var-table",
-      tags$thead(
-        tags$tr(
-          tags$th("Cutoff"), tags$th("Estimate (τ)"), tags$th("Std. Error"), tags$th("p-value")
-        )
-      ),
-      tags$tbody(
-        tags$tr(
-          tags$td("January 2024 (passage)"), tags$td("−77.6"), tags$td("[SE]"), tags$td("0.021")
+    # ======================================================
+    # TAB 1: Main Results
+    # ======================================================
+    nav_panel(
+      title = "Main Findings",
+      value = "main",
+      
+      #--------------------------------------------------
+      # Statewide Results
+      #--------------------------------------------------
+
+        div(
+          div(class = "document-card-title", "Statewide Results"),
+          div(
+            class = "document-card",
+            p(
+              "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. Because these two estimates capture different comparisons (pre-policy vs. warning period, and warning period vs. enforcement), they shouldn't be read as repeated measures of the same effect; rather, the presence of a significant effect at both points suggests a safety benefit emerged as soon as the law took effect.",
+              style = "line-height:1.8;"
+            )
+          )
         ),
-        tags$tr(
-          tags$td("January 2025 (enforcement)"), tags$td("−62.1"), tags$td("[SE]"), tags$td("0.023")
-        )
+        
+        div(
+          div(class = "document-card-title", "Regression Discontinuity Plot"),
+          div(
+            class = "document-card",
+            plotOutput("statewide_rd_plot", height = "360px")
+          ),
+          
+          div(class = "document-card-title", "Model Estimates"),
+          div(
+            class = "document-card",
+            uiOutput("statewide_results_table")   
+          )
+        ),
+      
+      hr(class = "double-hr"),
+      
+      #--------------------------------------------------
+      # Heterogeneity Analysis
+      #--------------------------------------------------
+      div(class = "document-card-title", "Heterogeneity Analysis"),
+      div(
+        class = "document-card",
+        p(
+          "Heterogeneity analysis is important because it helps identify whether a policy's effects differ across specific conditions or groups, providing a more detailed understanding than an overall average effect. Our analysis found that the reduction in crashes following AB 413 was concentrated among moderate-severity crashes, with significant declines in crashes involving possible injuries, complaints of pain, and suspected minor injuries, while fatal and serious injury crashes showed no statistically significant changes, likely due to their low frequency. We also found that the policy's effectiveness varied by lighting conditions. During the warning phase, crash reductions were driven primarily by declines in daytime crashes, whereas during the citation enforcement phase, significant reductions were observed mainly in nighttime crashes. These findings suggest that the impacts of AB 413 were not uniform, highlighting the value of examining how policy effects vary across different crash characteristics and environmental conditions.",
+          style = "line-height:1.8;"
+        ),
+        
+        uiOutput("heterogeneity_table")
+        
       )
     ),
-<<<<<<< HEAD
-    # RD plot placeholder
-    plotOutput("statewide_rd_plot"),
-=======
     
-    # RD plot placeholder
-    plotOutput("statewide_rd_plot"),
-    
->>>>>>> ee4cc8614d13775f89d57a79cf02297e79d1eea4
-    p(
-      "Both estimates use the robust bias-corrected inference approach from Cattaneo, Idrobo & Titiunik, which is the estimator we treat as authoritative for significance testing (see Methodology).",
-      style = "color: var(--brand-muted); font-size: 0.9rem; line-height: 1.7;"
+    # ======================================================
+    # TAB 2: Robustness Checks
+    # ======================================================
+    nav_panel(
+      title = "Robustness Checks",
+      value = "robustness",
+      
+      #--------------------------------------------------
+      # Bandwidth Analysis
+      #--------------------------------------------------
+      div(class = "document-card-title", "Bandwidth Selection Analysis"),
+      div(
+        class = "document-card",
+        p(
+          "We use a 12-month bandwidth in the main specification. The binding constraint is data availability: at the January 2025 cutoff, only 12 months of post-period data are currently observed, so 12 months is the widest symmetric window available for that cutoff, and we apply it to both cutoffs for comparability. Figure 10 indicates that this choice falls within the range where estimates are both precise and stable. Table 6 reports the main results at 10- and 11-month bandwidths as a robustness check. The point estimates are similar in magnitude, though standard errors are larger at the narrower bandwidths, and the estimates are no longer significant at the 5% level. Because the point estimates move little, the loss of significance appears to reflect the reduced number of post-period observations rather than instability in the estimated effect.",
+          style = "line-height:1.8;"
+        ),
+        plotOutput("bandwidth_plot", height = "350px")
+      ),
+      
+      hr(class = "double-hr"),
+      
+      #--------------------------------------------------
+      # Weather Analysis
+      #--------------------------------------------------
+      div(class = "document-card-title", "Weather Covariate Analysis"),
+      div(
+        class = "document-card",
+        p(
+          "Placeholder paragraph discussing the continuity of precipitation and temperature across the policy cutoff.",
+          style = "line-height:1.8;"
+        ),
+        layout_columns(
+          col_widths = c(6, 6),
+          plotOutput("temperature_plot", height = "300px"),
+          plotOutput("precipitation_plot", height = "300px")
+        )
+      ),
+      
+      hr(class = "double-hr"),
+      
+      #--------------------------------------------------
+      # Placebo Tests
+      #--------------------------------------------------
+      div(class = "document-card-title", "Placebo Tests"),
+      div(
+        class = "document-card",
+        p(
+          "Placeholder paragraph discussing placebo cutoff results at dates with no policy meaning (e.g., January 2016, 2017, and 2018), confirming the model does not estimate a spurious jump at arbitrary dates.",
+          style = "line-height:1.8;"
+        ),
+        plotOutput("placebo_plot", height = "350px")
+      )
     )
-  ))
+  )
+)
 
-about_page   <- div(
-  class = "page-content", 
-  h1(class = "page-title", "About Us"), p("Pide Akana Techa Kyle Klemba", 
-                                          style = "color: var(--brand-muted);"))
+# About Us Tab #
+# Helper for a picture placeholder + caption, reusable across all bio sections
+team_member_card <- function(name, description, img_src = NULL) {
+  tags$div(
+    style = "display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 260px;",
+    tags$div(
+      style = "width: 200px; height: 200px; border-radius: 50%; background-color: var(--brand-highlight); border: 2px solid var(--brand-border); display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 16px;",
+      if (!is.null(img_src)) {
+        tags$img(src = img_src, style = "width: 100%; height: 100%; object-fit: cover;")
+      } else {
+        tags$span(
+          style = "font-family: monospace; font-size: 0.7rem; text-transform: uppercase; color: var(--brand-muted); letter-spacing: 0.05em;",
+          "photo"
+        )
+      }
+    ),
+    tags$h4(
+      style = "font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--brand-navy); margin: 0 0 4px 0;",
+      name
+    ),
+    tags$div(
+      style = "font-family: monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brand-accent); margin-bottom: 8px;"
+    ),
+    tags$p(
+      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6;",
+      description
+    )
+  )
+}
+
+about_page <- div(
+  class = "page-content",
+  h1(class = "page-title", "About Us"),
+  
+  # ======================================================
+  # 1. Introductory paragraph about DSPG
+  # ======================================================
+  div(class = "document-card-title", "About the DSPG Program"),
+  div(
+    class = "document-card",
+    p(
+      "The Data Science for the Public Good (DSPG) program is a Virginia Tech initiative that pairs student interns with faculty and public-sector partners to apply data science methods to pressing policy and community challenges. This project, evaluating the impact of California's AB 413 Daylighting Law on pedestrian and bicyclist safety, was conducted as part of the summer DSPG cohort in partnership with transportation safety stakeholders.",
+      style = "line-height:1.8;"
+    )
+  ),
+  
+  # ======================================================
+  # 2. Undergraduate Interns
+  # ======================================================
+  div(class = "document-card-title", "Undergraduate Interns"),
+  div(
+    class = "document-card",
+    style = "display: flex; justify-content: space-around; flex-wrap: wrap; gap: 32px; padding: 32px 28px;",
+    team_member_card(
+      name = "Kyle Klemba",
+      description = "Data science & Economics, College of William & Mary"
+    ),
+    team_member_card(
+      name = "Pride Akana Techa",
+      description = "Computer Science & Mathematics, Berea College"
+    )
+  ),
+  
+  # ======================================================
+  # 3. Graduate Mentor
+  # ======================================================
+  div(class = "document-card-title", "Graduate Mentor"),
+  div(
+    class = "document-card",
+    style = "display: flex; justify-content: center; padding: 32px 28px;",
+    team_member_card(
+      name = "Yuanyuan Wen",
+      description = "Graduate Mentor"
+    )
+  ),
+  
+  # ======================================================
+  # 4. Faculty Mentors
+  # ======================================================
+  div(class = "document-card-title", "Faculty Mentors"),
+  div(
+    class = "document-card",
+    style = "display: flex; justify-content: space-around; flex-wrap: wrap; gap: 32px; padding: 32px 28px;",
+    team_member_card(
+      name = "Dr. Yujuan Gao",
+      description =  "Faculty Mentor"
+          ),
+    team_member_card(
+      name = "Dr. Michael Cary",
+      description = "Faculty Mentor"
+    )
+  )
+)
 
 
 # ==========================================================================
@@ -900,7 +1266,7 @@ ui <- page_fluid(
     tags$link(rel = "icon", href = "data:,"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js")
   ),
-  useShinyjs(), 
+  useShinyjs(),
   div(
     class = "app-shell",
     tags$aside(
@@ -921,17 +1287,16 @@ ui <- page_fluid(
       )
     ),
     
-    
     tags$main(
       class = "app-main",
       navset_hidden(
         id = "main_nav",
-        nav_panel(title = "Overview",       value = "overview",     overview_page),
-        nav_panel(title = "Literature",       value = "literature", literature_page),
-        nav_panel(title = "Maps",           value = "maps",         maps_page),
-        nav_panel(title = "Methodology",   value = "methodology", methodology_page),
-        nav_panel(title = "Results",        value = "results",      results_page),
-        nav_panel(title = "About Us",       value = "about",        about_page)
+        nav_panel(title = "Overview",     value = "overview",     overview_page),
+        nav_panel(title = "Literature",   value = "literature",   literature_page),
+        nav_panel(title = "Maps",         value = "maps",         maps_page),
+        nav_panel(title = "Methodology",  value = "methodology",  methodology_page),
+        nav_panel(title = "Results",      value = "results",      results_page),
+        nav_panel(title = "About Us",     value = "about",        about_page)
       )
     )
   )
@@ -1036,17 +1401,15 @@ server <- function(input, output, session) {
   })
   
   output$main_plot <- renderPlotly({
-    # FIX: Changed data() to your actual defined reactive source filtered_data_graph()
-    if (nrow(filtered_data_graph()) == 0) { 
-      plot_ly() |> 
+    if (nrow(filtered_data_graph()) == 0) {
+      plot_ly() |>
         layout(
           xaxis = list(visible = FALSE), yaxis = list(visible = FALSE),
           annotations = list(text = "No metrics matched selected arguments.", showarrow = FALSE, font = list(family = "monospace", size = 12, color = brand$muted))
-        ) |> 
+        ) |>
         config(displaylogo = FALSE)
     } else {
-      # FIX: Changed data() to filtered_data_graph() here as well
-      plot_data <- filtered_data_graph() %>% filter(!is.na(COLLISION_DATE))  
+      plot_data <- filtered_data_graph() %>% filter(!is.na(COLLISION_DATE))
       
       if (input$granularity == "year") {
         summary_data <- plot_data %>%
@@ -1064,8 +1427,8 @@ server <- function(input, output, session) {
       
       plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD) %>%
         add_trace(
-          y = ~Total_Accidents, 
-          type = "bar", 
+          y = ~Total_Accidents,
+          type = "bar",
           name = "Incidents",
           marker = list(color = brand$muted)
         ) %>%
@@ -1077,7 +1440,7 @@ server <- function(input, output, session) {
           paper_bgcolor = "rgba(0,0,0,0)"
         ) %>%
         config(displayModeBar = FALSE)
-      }
+    }
   })
   
   output$map <- renderLeaflet({
@@ -1130,7 +1493,6 @@ server <- function(input, output, session) {
           blur = 22, max = 0.02, radius = 14,
           gradient = c("0.2" = "#440154", "0.4" = "#3b528b",
                        "0.6" = "#21918c", "0.8" = "#5ec962", "1.0" = "#fde725"),
-          
           group = "Accident Heatmap"
         )
       if (nrow(coords) <= 50000) {
@@ -1168,6 +1530,157 @@ server <- function(input, output, session) {
       }
     }
   })
+  
+  # --- Results page: statewide RDiT plot and estimates table ---------------
+  output$statewide_rd_plot <- renderPlot({
+    statewide_rdit_plot
+  })
+  
+  output$statewide_results_table <- renderUI({
+    results_df <- tibble::tibble(
+      Cutoff       = c("January 2024", "January 2025"),
+      Estimate     = c(two_year_model$coef["Robust", 1], rd_model3$coef["Robust", 1]),
+      `Std. Error` = c(two_year_model$se["Robust", 1],   rd_model3$se["Robust", 1]),
+      CI_lower     = c(two_year_model$ci["Robust", 1],   rd_model3$ci["Robust", 1]),
+      CI_upper     = c(two_year_model$ci["Robust", 2],   rd_model3$ci["Robust", 2]),
+      `p-value`    = c(two_year_model$pv["Robust", 1],   rd_model3$pv["Robust", 1])
+    )
+    
+    sig_stars <- function(p) {
+      if (p < 0.01) "***"
+      else if (p < 0.05) "**"
+      else if (p < 0.10) "*"
+      else ""
+    }
+    
+    tagList(
+      tags$table(
+        class = "results-table",
+        tags$thead(
+          tags$tr(
+            tags$th("Cutoff"),
+            tags$th("Estimate"),
+            tags$th("Std. Error"),
+            tags$th("95% CI"),
+            tags$th("p-value")
+          )
+        ),
+        tags$tbody(
+          purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
+            stars <- sig_stars(`p-value`)
+            tags$tr(
+              tags$td(class = "cutoff-name", Cutoff),
+              tags$td(
+                sprintf("%.2f", Estimate),
+                if (stars != "") tags$span(class = "sig-stars", stars)
+              ),
+              tags$td(sprintf("%.2f", `Std. Error`)),
+              tags$td(sprintf("[%.2f, %.2f]", CI_lower, CI_upper)),
+              tags$td(sprintf("%.2f", `p-value`))
+            )
+          })
+        )
+      ),
+      tags$p(
+        class = "results-table-note",
+        "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level."
+      )
+    )
+  })
+  
+  # Heterogeneity Analysis #
+  output$heterogeneity_table <- renderUI({
+    het_df <- tibble::tribble(
+      ~Category,            ~Subcategory,       ~Cutoff,     ~Estimate,  ~pval, ~se,     ~ci_lo,    ~ci_hi,
+      "Lighting Condition",  "Daylight",         "Jan 2024",  -39.312,    0.002, 11.038,  -55.159,   -11.893,
+      "Lighting Condition",  "Daylight",         "Jan 2025",  -4.029,     0.925, 19.811,  -36.965,    40.693,
+      "Lighting Condition",  "Dark Time",        "Jan 2024",  -40.067,    0.077, 24.293,  -90.645,     4.584,
+      "Lighting Condition",  "Dark Time",        "Jan 2025",  -57.804,    0.008, 28.256, -130.360,   -19.597,
+      "Collision Severity",  "Possible Injury",  "Jan 2024",  -42.439,    0.003, 14.019,  -69.147,   -14.194,
+      "Collision Severity",  "Possible Injury",  "Jan 2025",  -47.156,    0.003, 19.396,  -94.741,   -18.711,
+      "Collision Severity",  "Minor Injury",     "Jan 2024",  -34.980,    0.016, 13.158,  -57.393,    -5.813,
+      "Collision Severity",  "Minor Injury",     "Jan 2025",  -8.036,     0.373,  9.138,  -26.061,     9.761,
+      "Collision Severity",  "Fatal Injury",     "Jan 2024",  -0.377,     0.664,  1.366,   -3.270,     2.084,
+      "Collision Severity",  "Fatal Injury",     "Jan 2025",  -1.364,     0.824,  2.602,   -5.681,     4.520,
+      "Collision Severity",  "Serious Injury",   "Jan 2024",   0.164,     0.941,  6.996,  -14.225,    13.197,
+      "Collision Severity",  "Serious Injury",   "Jan 2025",  -5.586,     0.201,  5.877,  -19.039,     4.000
+    )
+    
+    sig_stars <- function(p) {
+      if (p < 0.01) "***"
+      else if (p < 0.05) "**"
+      else if (p < 0.10) "*"
+      else ""
+    }
+    
+    # rowspan counts for Category and Subcategory groups
+    cat_spans    <- het_df %>% dplyr::count(Category, name = "n")
+    subcat_spans <- het_df %>% dplyr::count(Category, Subcategory, name = "n")
+    
+    rows <- list()
+    cat_seen    <- character(0)
+    subcat_seen <- character(0)
+    
+    for (i in seq_len(nrow(het_df))) {
+      row <- het_df[i, ]
+      stars <- sig_stars(row$pval)
+      
+      cat_cell <- if (!(row$Category %in% cat_seen)) {
+        cat_seen <- c(cat_seen, row$Category)   # was <<-
+        tags$td(
+          class = "group-cell",
+          rowspan = cat_spans$n[cat_spans$Category == row$Category],
+          row$Category
+        )
+      } else NULL
+      
+      subcat_key <- paste(row$Category, row$Subcategory)
+      subcat_cell <- if (!(subcat_key %in% subcat_seen)) {
+        subcat_seen <- c(subcat_seen, subcat_key)   # was <<-
+        tags$td(
+          class = "subgroup-cell",
+          rowspan = subcat_spans$n[subcat_spans$Category == row$Category & subcat_spans$Subcategory == row$Subcategory],
+          row$Subcategory
+        )
+      } else NULL
+      
+      rows[[i]] <- tags$tr(
+        cat_cell,
+        subcat_cell,
+        tags$td(row$Cutoff),
+        tags$td(
+          sprintf("%.2f", row$Estimate),
+          if (stars != "") tags$span(class = "sig-stars", stars)
+        ),
+        tags$td(sprintf("%.2f", row$pval)),
+        tags$td(sprintf("%.2f", row$se)),
+        tags$td(sprintf("[%.2f, %.2f]", row$ci_lo, row$ci_hi))
+      )
+    }
+    
+    tagList(
+      tags$table(
+        class = "results-table",
+        tags$thead(
+          tags$tr(
+            tags$th("Category"),
+            tags$th("Sub-category"),
+            tags$th("Cutoff"),
+            tags$th("RD Effect"),
+            tags$th("p-value"),
+            tags$th("Std. Error"),
+            tags$th("95% CI")
+          )
+        ),
+        tags$tbody(rows)
+      ),
+      tags$p(
+        class = "results-table-note",
+        "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level."
+      )
+    )
+  })
+  
 }
 # Run the app
 shinyApp(ui, server)
