@@ -1,3 +1,6 @@
+
+# Set Up ------------------------------------------------------------------
+
 library(here)
 library(sf)
 library(dplyr)
@@ -114,19 +117,19 @@ cat0_rdit <- crashes_cat |>
             .groups = "drop")
 
 # Standardizing crash outcomes
-# pre_mean <- cat0_rdit |>
-#   filter(Post == 0) |>
-#   summarise(mean = mean(Total_crashes)) |>
-#   pull(mean)
-# pre_sd <- cat0_rdit |>
-#   filter(Post == 0) |>
-#   summarise(sd = sd(Total_crashes)) |>
-#   pull(sd)
-# cat0_rdit <- cat0_rdit |>
-#   mutate(Crash_std = (Total_crashes - pre_mean) / pre_sd)
+ pre_mean <- cat0_rdit |>
+   filter(Post == 0) |>
+   summarise(mean = mean(Total_crashes)) |>
+   pull(mean)
+ pre_sd <- cat0_rdit |>
+   filter(Post == 0) |>
+   summarise(sd = sd(Total_crashes)) |>
+   pull(sd)
+ cat0_rdit <- cat0_rdit |>
+   mutate(Crash_std = (Total_crashes - pre_mean) / pre_sd)
 
 # Run model
-cat0_model <- rdrobust(y = cat0_rdit$Total_crashes,
+cat0_model <- rdrobust(y = cat0_rdit$Crash_std,
                             x = cat0_rdit$Time,
                             covs = model.matrix(~ Season_factor, cat0_rdit)[, -1],
                             c = 0,
@@ -156,20 +159,20 @@ cat0_rdit1 <- crashes_cat |>
   summarise(Total_crashes = n(),
             .groups = "drop")
 
-# # Standardizing crash outcomes
-# pre_mean <- cat0_rdit1 |>
-#   filter(Post == 0) |>
-#   summarise(mean = mean(Total_crashes)) |>
-#   pull(mean)
-# pre_sd <- cat0_rdit1 |>
-#   filter(Post == 0) |>
-#   summarise(sd = sd(Total_crashes)) |>
-#   pull(sd)
-# cat0_rdit1 <- cat0_rdit1 |>
-#   mutate(Crash_std = (Total_crashes - pre_mean) / pre_sd)
+ # Standardizing crash outcomes
+ pre_mean <- cat0_rdit1 |>
+   filter(Post == 0) |>
+   summarise(mean = mean(Total_crashes)) |>
+   pull(mean)
+ pre_sd <- cat0_rdit1 |>
+   filter(Post == 0) |>
+   summarise(sd = sd(Total_crashes)) |>
+   pull(sd)
+ cat0_rdit1 <- cat0_rdit1 |>
+   mutate(Crash_std = (Total_crashes - pre_mean) / pre_sd)
 
 # Run model
-cat0_model1 <- rdrobust(y = cat0_rdit1$Total_crashes,
+cat0_model1 <- rdrobust(y = cat0_rdit1$Crash_std,
                        x = cat0_rdit1$Time,
                        covs = model.matrix(~ Season_factor, cat0_rdit1)[, -1],
                        c = 0,
@@ -183,7 +186,7 @@ summary(cat0_model1)
 # One Intersection --------------------------------------------------------
 
 
-# Jan 2024 Cuoff
+# Jan 2024 Cutoff
 
 cat1_rdit <- crashes_cat |> 
   filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
@@ -451,7 +454,99 @@ cat3_model1 <- rdrobust(y = cat3_rdit1$Crash_std,
 summary(cat3_model1)
 
 
-crashes_cat |> 
-  filter(PEDESTRIAN_ACCIDENT == "Y") |> 
-  group_by(intersection_cat) |> 
-  summarise(Total = n(), .groups = "drop")
+# BAR PLOT ---------------------------------------------------------------
+
+# color palette
+sunflower <- c(
+  "#8A9B5B",
+  "#F7F4E7",
+  "#F2C94C",
+  "#1E4E8C",
+  "#D4A04A",
+)
+
+# Extract coefficients from rdrobust
+extract_rd <- function(model, intersections, cutoff){
+  
+  tibble(
+    Intersections = intersections,
+    Cutoff = cutoff,
+    Effect = model$coef[3,1],
+    SE = model$se[3,1],
+    P_value = model$pv[3,1],
+    CI_lower = model$ci[3,1],
+    CI_upper = model$ci[3,2]
+  )
+  
+}
+
+# Build datframes for each category
+num_intersections <- bind_rows(
+  
+  extract_rd(cat0_model,      "Zero", "Jan 2024"),
+  extract_rd(cat0_model1,     "Zero", "Jan 2025"),
+  
+  extract_rd(cat1_model,     "One", "Jan 2024"),
+  extract_rd(cat1_model1,    "One", "Jan 2025"),
+  
+  extract_rd(cat2_model,      "Two", "Jan 2024"),
+  extract_rd(cat2_model1,     "Two", "Jan 2025"),
+  
+  extract_rd(cat3_model,   "Three +", "Jan 2024"),
+  extract_rd(cat3_model1,  "Three +", "Jan 2025")
+  
+) |>
+  
+  mutate(Intersections = factor(Intersections,
+                           levels = c("Zero", "One", "Two", "Three +")),
+         Cutoff = factor(Cutoff, 
+                         levels = c("Jan 2024","Jan 2025")),
+         Sig = ifelse(P_value < 0.05, "**", ""), 
+         Label = round(Effect, 2))
+
+# Plot
+ggplot(num_intersections,
+       aes(Intersections, Effect, fill = Cutoff)) +
+  
+  geom_col(position = position_dodge(width = 0.6),
+           width = .55) +
+  
+  geom_text(aes(label = Label,
+                vjust = ifelse(Effect < 0,1.15,-0.35)),
+            position = position_dodge(width = .65),
+            fontface = "bold",
+            size = 4.5) +
+  
+  geom_text(aes(label = Sig,
+                y = ifelse(Effect < 0, Effect - 2, Effect + 2),
+                vjust = ifelse(Effect < 0, -0.4, 8.5), 
+                hjust = -1.5),
+            position = position_dodge(width = 0.65), 
+            size = 4, 
+            fontface = "bold") +
+  
+  scale_x_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  
+  geom_hline(yintercept = 0,
+             linewidth = .5) +
+  
+  scale_fill_manual(values = sunflower) +
+  
+  labs(title = "RD Effect by Number of Intersections",
+       subtitle = "Comparison of January 2024 and January 2025 Cutoffs",
+       x = NULL,
+       y = "RD Effect (Standardized)",
+       fill = NULL,
+       caption = "** Significant at the 5% level") +
+  
+  theme_minimal(base_size = 13) +
+  
+  theme(legend.position="bottom",
+        plot.caption = element_text(hjust = 0.5, 
+                                    face = "italic", 
+                                    size = 10),
+        axis.text.x=element_text(face="bold",
+                                 size=13),
+        plot.title=element_text(face="bold", size=17),
+        panel.grid.major.x=element_blank(),
+        panel.grid.minor=element_blank())

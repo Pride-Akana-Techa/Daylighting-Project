@@ -1,13 +1,13 @@
 
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------------
 
 ## RDiT by crash severity
 ## Inputs: initial-analysis/data-clean/updated_tims.rds
 
-# -------------------------------------------------------------------------
+# ------------------------------------------------------------------------
 
 
-# Set Up ------------------------------------------------------------------
+# Set Up -----------------------------------------------------------------
 
 # load libraries and dataset
 library(tidyverse)
@@ -54,18 +54,9 @@ fatal_data <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2024 <- fatal_data |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-fatal_data <- fatal_data |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2024)
-
 
 # Run the model
-fatal_model <- rdrobust(y = fatal_data$CRASHES_norm,
+fatal_model <- rdrobust(y = fatal_data$CRASHES,
                            x = fatal_data$Time,
                            covs = model.matrix(~ Season_factor, fatal_data)[, -1],
                            c = 0,
@@ -76,11 +67,11 @@ fatal_model <- rdrobust(y = fatal_data$CRASHES_norm,
 summary(fatal_model)
 
 # Adjusting for seasonality before plotting
-season_fatal_model <- lm(CRASHES_norm ~ Season_factor,
+season_fatal_model <- lm(CRASHES ~ Season_factor,
                             data = fatal_data)
 
 fatal_data$Crash_adj <- resid(season_fatal_model) + 
-  mean(fatal_data$CRASHES_norm)
+  mean(fatal_data$CRASHES)
 
 
 
@@ -100,18 +91,9 @@ fatal_data2 <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- fatal_data2 |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-fatal_data2 <- fatal_data2 |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
-
 
 # Run model
-fatal_model2 <- rdrobust(y = fatal_data2$CRASHES_norm,
+fatal_model2 <- rdrobust(y = fatal_data2$CRASHES,
                             x = fatal_data2$Time,
                             covs = model.matrix(~ Season_factor, fatal_data2)[, -1],
                             c = 0,
@@ -122,11 +104,11 @@ fatal_model2 <- rdrobust(y = fatal_data2$CRASHES_norm,
 summary(fatal_model2)
 
 # Adjusting for seasonality before plotting
-season_fatal_model2 <- lm(CRASHES_norm ~ Season_factor,
+season_fatal_model2 <- lm(CRASHES~ Season_factor,
                              data = fatal_data2)
 
 fatal_data2$Crash_adj <- resid(season_fatal_model2) + 
-  mean(fatal_data2$CRASHES_norm)
+  mean(fatal_data2$CRASHES)
 
 
 # Combined plot with CIs
@@ -244,18 +226,9 @@ possible_data <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- possible_data |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-possible_data <- possible_data |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
-
 
 # Run the model
-possible_model <- rdrobust(y = possible_data$CRASHES_norm,
+possible_model <- rdrobust(y = possible_data$CRASHES,
                         x = possible_data$Time,
                         covs = model.matrix(~ Season_factor, possible_data)[, -1],
                         c = 0,
@@ -290,17 +263,9 @@ possible_data2 <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- possible_data2 |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-possible_data2 <- possible_data2 |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
 
 # Run model
-possible_model2 <- rdrobust(y = possible_data2$CRASHES_norm,
+possible_model2 <- rdrobust(y = possible_data2$CRASHES,
                          x = possible_data2$Time,
                          covs = model.matrix(~ Season_factor, possible_data2)[, -1],
                          c = 0,
@@ -311,10 +276,10 @@ possible_model2 <- rdrobust(y = possible_data2$CRASHES_norm,
 summary(possible_model2)
 
 # Adjusting for seasonality before plotting
-season_possible_model2 <- lm(CRASHES_norm ~ Season_factor,
+season_possible_model2 <- lm(CRASHES ~ Season_factor,
                           data = possible_data2)
 
-possible_data2$Crash_adj <- resid(season_possible_model2) + mean(possible_data2$CRASHES_norm)
+possible_data2$Crash_adj <- resid(season_possible_model2) + mean(possible_data2$CRASHES)
 
 
 # Combined plot with CIs
@@ -414,7 +379,7 @@ ggsave(filename = "initial-analysis/figs/possible_inj_models.png",
        width = 20)
 
 
-# Minor Injury  -----------------------------------------------------------
+# Minor Injury  ----------------------------------------------------------
 
 ## Jan 2024 Cutoff ##
 # Prepare data
@@ -432,17 +397,9 @@ minor_data <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- minor_data |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-minor_data <- minor_data |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
 
 # Run the model
-minor_model <- rdrobust(y = minor_data$CRASHES_norm,
+minor_model <- rdrobust(y = minor_data$CRASHES,
                         x = minor_data$Time,
                         covs = model.matrix(~ Season_factor, minor_data)[, -1],
                         c = 0,
@@ -453,11 +410,11 @@ minor_model <- rdrobust(y = minor_data$CRASHES_norm,
 summary(minor_model)
 
 # Adjusting for seasonality before plotting
-season_minor_model <- lm(CRASHES_norm ~ Season_factor,
+season_minor_model <- lm(CRASHES~ Season_factor,
                          data = minor_data)
 
 minor_data$Crash_adj <- resid(season_minor_model) + 
-  mean(minor_data$CRASHES_norm)
+  mean(minor_data$CRASHES)
 
 
 
@@ -477,18 +434,9 @@ minor_data2 <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- minor_data2 |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-minor_data2 <- minor_data2 |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
-
 
 # Run model
-minor_model2 <- rdrobust(y = minor_data2$CRASHES_norm,
+minor_model2 <- rdrobust(y = minor_data2$CRASHES,
                          x = minor_data2$Time,
                          covs = model.matrix(~ Season_factor, minor_data2)[, -1],
                          c = 0,
@@ -499,11 +447,11 @@ minor_model2 <- rdrobust(y = minor_data2$CRASHES_norm,
 summary(minor_model2)
 
 # Adjusting for seasonality before plotting
-season_minor_model2 <- lm(CRASHES_norm ~ Season_factor,
+season_minor_model2 <- lm(CRASHES~ Season_factor,
                           data = minor_data2)
 
 minor_data2$Crash_adj <- resid(season_minor_model2) + 
-  mean(minor_data2$CRASHES_norm)
+  mean(minor_data2$CRASHES)
 
 
 # Combined plot with CIs
@@ -603,7 +551,7 @@ ggsave(filename = "initial-analysis/figs/minor_inj_models.png",
        width = 20)
 
 
-# Severe Injury  -----------------------------------------------------------
+# Severe Injury  ---------------------------------------------------------
 
 ## Jan 2024 Cutoff ##
 # Prepare data
@@ -621,18 +569,9 @@ severe_data <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- severe_data |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
-
-severe_data <- severe_data |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
-
 
 # Run the model
-severe_model <- rdrobust(y = severe_data$CRASHES_norm,
+severe_model <- rdrobust(y = severe_data$CRASHES,
                         x = severe_data$Time,
                         covs = model.matrix(~ Season_factor, severe_data)[, -1],
                         c = 0,
@@ -643,11 +582,11 @@ severe_model <- rdrobust(y = severe_data$CRASHES_norm,
 summary(severe_model)
 
 # Adjusting for seasonality before plotting
-season_severe_model <- lm(CRASHES_norm ~ Season_factor,
+season_severe_model <- lm(CRASHES ~ Season_factor,
                          data = severe_data)
 
 severe_data$Crash_adj <- resid(season_severe_model) + 
-  mean(severe_data$CRASHES_norm)
+  mean(severe_data$CRASHES)
 
 
 
@@ -667,17 +606,10 @@ severe_data2 <- severity_monthly |>
          levels = c("Winter", "Spring", "Summer", "Fall")
          ))
 
-# --- ratio-to-baseline normalization ---
-baseline_mean_2025 <- severe_data2 |> 
-  filter(Time < 0) |> 
-  summarise(m = mean(CRASHES)) |> 
-  pull(m)
 
-severe_data2 <- severe_data2 |> 
-  mutate(CRASHES_norm = CRASHES / baseline_mean_2025)
 
 # Run model
-severe_model2 <- rdrobust(y = severe_data2$CRASHES_norm,
+severe_model2 <- rdrobust(y = severe_data2$CRASHES,
                          x = severe_data2$Time,
                          covs = model.matrix(~ Season_factor, severe_data2)[, -1],
                          c = 0,
@@ -688,10 +620,10 @@ severe_model2 <- rdrobust(y = severe_data2$CRASHES_norm,
 summary(severe_model2)
 
 # Adjusting for seasonality before plotting
-season_severe_model2 <- lm(CRASHES_norm ~ Season_factor,
+season_severe_model2 <- lm(CRASHES ~ Season_factor,
                           data = severe_data2)
 
-severe_data2$Crash_adj <- resid(season_severe_model2) + mean(severe_data2$CRASHES_norm)
+severe_data2$Crash_adj <- resid(season_severe_model2) + mean(severe_data2$CRASHES)
 
 
 # Combined plot with CIs
@@ -792,3 +724,114 @@ ggsave(filename = "initial-analysis/figs/severe_inj_models.png",
 
 
 
+
+# BAR PLOT ---------------------------------------------------------------
+
+# color palette
+sunflower <- c(
+  "#F2C94C",
+  "#1E4E8C",
+  "#D4A04A",
+  "#8A9B5B",
+  "#F7F4E7"
+)
+
+# Extract coefficients from rdrobust
+extract_rd <- function(model, severity, cutoff){
+  
+  tibble(
+    Severity = severity,
+    Cutoff = cutoff,
+    Effect = model$coef[3,1],
+    SE = model$se[3,1],
+    P_value = model$pv[3,1],
+    CI_lower = model$ci[3,1],
+    CI_upper = model$ci[3,2]
+  )
+  
+}
+
+# Build datframes for each category
+severity_effects <- bind_rows(
+  
+  extract_rd(fatal_model,      "Fatal", "Jan 2024"),
+  extract_rd(fatal_model2,     "Fatal", "Jan 2025"),
+  
+  extract_rd(severe_model,     "Serious", "Jan 2024"),
+  extract_rd(severe_model2,    "Serious", "Jan 2025"),
+  
+  extract_rd(minor_model,      "Minor", "Jan 2024"),
+  extract_rd(minor_model2,     "Minor", "Jan 2025"),
+  
+  extract_rd(possible_model,   "Possible", "Jan 2024"),
+  extract_rd(possible_model2,  "Possible", "Jan 2025")
+  
+) |>
+  
+  mutate(Severity = factor(Severity,
+                           levels = c("Fatal", "Serious", "Minor", "Possible")),
+         Cutoff = factor(Cutoff, 
+                         levels = c("Jan 2024","Jan 2025")),
+         Sig = case_when(
+           P_value < 0.01 ~ "***",
+           P_value < 0.05 ~ "**",
+           P_value < 0.10 ~ "*",
+           TRUE ~ ""
+         ), 
+         Label = round(Effect, 2))
+
+# Plot
+ggplot(severity_effects,
+       aes(Severity, Effect, fill = Cutoff)) +
+  
+  geom_col(position = position_dodge(width = 0.6),
+           width = .55) +
+  
+  geom_text(aes(label = Label,
+                vjust = ifelse(Effect < 0, 1.15, -0.35),
+                color = ifelse(Sig != "" & !is.na(Sig), "#800000", "black")),
+            position = position_dodge(width = .65),
+            fontface = "bold",
+            size = 4.5) +
+  
+  geom_text(aes(label = Sig,
+                y = ifelse(Effect < 0, Effect - 2, Effect + 2),
+                vjust = ifelse(Effect < 0, 0, -0.7), 
+                hjust = -1.5,
+                color = "#800000"), 
+            position = position_dodge(width = 0.65), 
+            size = 4, 
+            fontface = "bold") +
+  
+  scale_color_identity() +  
+  
+  scale_x_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  
+  geom_hline(yintercept = 0,
+             linewidth = .5) +
+  
+  scale_fill_manual(values = sunflower) +
+  
+  labs(title = "RD Effect by Crash Severity",
+       subtitle = "Comparison of January 2024 and January 2025 Cutoffs",
+       x = NULL,
+       y = "RD Effect",
+       fill = NULL,
+       caption = "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level") +
+  
+  theme_minimal(base_size = 13) +
+  
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0.5, 
+                                    face = "italic", 
+                                    size = 10,
+                                    color = "#800000"),  
+        axis.text.x = element_text(face = "bold", size = 13),
+        plot.title = element_text(face = "bold", size = 17),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank())
+
+# save
+ggsave(filename = "initial-analysis/figs/severity-analysis.png",
+       width = 10,
+       height = 7.5)
