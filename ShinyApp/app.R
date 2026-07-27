@@ -299,6 +299,7 @@ app_theme <- bs_theme(
       border: 1px solid var(--brand-border);
       background: #FFFFFF;
       overflow: hidden;
+      position: relative;
     }
     .map-legend-banner {
       display: flex;
@@ -314,6 +315,45 @@ app_theme <- bs_theme(
       background-color: var(--brand-link);
       padding: 0.05em 0.2em;
       border-radius: 2px;
+    }
+
+    /* Maps & Trends two-column layout — plain flexbox on purpose.
+       bslib::layout_columns() wraps children in a CSS-grid container that
+       (depending on the fillable context) can end up with overflow rules
+       that silently break position:sticky on a child. A plain flex row
+       with align-items:flex-start avoids that entirely. */
+    .maps-flex-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 2rem;
+      flex-wrap: nowrap;
+    }
+    .maps-flex-row > .filter-sticky-col {
+      flex: 0 0 280px;
+      max-width: 280px;
+    }
+    .maps-flex-row > .maps-right-col {
+      flex: 1 1 auto;
+      min-width: 320px;
+    }
+    .filter-sticky-col {
+      position: -webkit-sticky;
+      position: sticky;
+      top: 20px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .filter-sticky-col::-webkit-scrollbar { width: 6px; }
+    .filter-sticky-col::-webkit-scrollbar-thumb { background: var(--brand-border); border-radius: 3px; }
+
+    .map-loading-note {
+      font-family: monospace;
+      font-size: 0.72rem;
+      color: var(--brand-muted);
+      padding: 6px 20px;
+      background: var(--brand-surface);
+      border-top: 1px solid var(--brand-border);
     }
 
     /* Literature review content (pulled in from Word doc via pandoc) */
@@ -458,6 +498,15 @@ app_theme <- bs_theme(
       .sidebar-brand { margin-bottom: 0; padding-bottom: 12px; }
       .app-main { padding: 32px 24px; }
     }
+    /* Only collapse the filter column under the map/graph on genuinely
+       narrow (phone-width) screens — the main sidebar breakpoint above is
+       too wide for this and was causing the filter panel to stack full-width
+       even in a normal desktop window. */
+    @media (max-width: 700px) {
+      .maps-flex-row { flex-wrap: wrap; }
+      .filter-sticky-col { position: relative; top: 0; max-height: none; overflow-y: visible; flex-basis: 100%; max-width: 100%; }
+      .maps-flex-row > .maps-right-col { flex-basis: 100%; min-width: 0; }
+    }
   "))
 
 
@@ -489,6 +538,22 @@ bike_or_ped_acc_sf <- bike_or_ped_acc_sf %>%
     year  = lubridate::year(COLLISION_DATE),
     month = lubridate::floor_date(COLLISION_DATE, "month")
   )
+
+# Severity code labels, shared across dropdown filters and the graph's
+# secondary color-by aggregation
+severity_labels <- c(
+  "Fatal Injury" = "1",
+  "Serious Injury" = "2",
+  "Minor Injury" = "3",
+  "Complaint of Pain" = "4"
+)
+severity_labels_rev <- setNames(names(severity_labels), severity_labels)
+
+# Map-performance caps: keep the browser responsive and avoid crashes when a
+# filter selection still matches a very large number of records
+MAX_MAP_POINTS     <- 20000  
+MAX_CLUSTER_POINTS <- 8000   
+TOP_N_COUNTIES     <- 10     
 
 # Convert word to HTML
 docx_path <- normalizePath("shiny-data/literature_review.docx", mustWork = TRUE)
@@ -754,18 +819,18 @@ overview_page <- div(
     div(
       div(class = "document-card-title", "About the Law"),
       div(class = "document-card",
-                p(
           p(
-            "On October 10, 2023, ",
-            HTML('<a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB413" target="_blank" class="text-link">California Assembly Bill 413 (AB 413)</a>'),
-            " was signed into law, adding Section 22500(n) to the California Vehicle Code. The legislation prohibits stopping, standing, or parking within 20 feet of the approach side of any marked or unmarked crosswalk or 15 feet where a curb extension is present. This restriction applies regardless of whether the curb is painted red, meaning the law took full legal effect independent of local signage or curb markings."
-          ),
-          p(
-            "This traffic safety practice, known as ",
-            HTML("<em>daylighting</em>,"),
-            " is intended to improve intersection visibility by removing vehicles that can obstruct pedestrian and driver sightlines at intersections. Derived from the architectural term for allowing for natural light into a space, daylighting as a road safety tool dates back to the 1968 Vienna Convention on Road Traffic. California was one of only a handful of states without a statewide daylighting requirement; more than 40 states already mandated some form of it. The bill was authored by Assemblymember Alex Lee (D-AD 24), co-sponsored by the California Bicycle Coalition and Streets For All, and signed into law by Governor Gavin Newsom."
+            p(
+              "On October 10, 2023, ",
+              HTML('<a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240AB413" target="_blank" class="text-link">California Assembly Bill 413 (AB 413)</a>'),
+              " was signed into law, adding Section 22500(n) to the California Vehicle Code. The legislation prohibits stopping, standing, or parking within 20 feet of the approach side of any marked or unmarked crosswalk or 15 feet where a curb extension is present. This restriction applies regardless of whether the curb is painted red, meaning the law took full legal effect independent of local signage or curb markings."
+            ),
+            p(
+              "This traffic safety practice, known as ",
+              HTML("<em>daylighting</em>,"),
+              " is intended to improve intersection visibility by removing vehicles that can obstruct pedestrian and driver sightlines at intersections. Derived from the architectural term for allowing for natural light into a space, daylighting as a road safety tool dates back to the 1968 Vienna Convention on Road Traffic. California was one of only a handful of states without a statewide daylighting requirement; more than 40 states already mandated some form of it. The bill was authored by Assemblymember Alex Lee (D-AD 24), co-sponsored by the California Bicycle Coalition and Streets For All, and signed into law by Governor Gavin Newsom."
+            )
           )
-        )
       ),
       
       div(class = "register-header", span("IMPLEMENTATION TIMELINE")),
@@ -807,7 +872,7 @@ overview_page <- div(
             )
           )
       ),
-  
+      
       tags$head(
         tags$style(HTML("
     .specimen-grid {
@@ -879,11 +944,11 @@ literature_page <- div(
 maps_page <- div(
   class = "page-content",
   h1(class = "page-title", "Maps & Trends"),
-  layout_columns(
-    col_widths = c(4, 8),
-    gap = "2.5rem",
+  div(
+    class = "maps-flex-row",
     # Left Configuration
     div(
+      class = "filter-sticky-col",
       filter_panel_register <- div(
         div(class = "section-eyebrow", "crash filters"),
         div(
@@ -929,6 +994,14 @@ maps_page <- div(
           class = "register-row",
           span("Interval"),
           radioButtons("granularity", label = NULL, choices = c("Yearly" = "year", "Monthly" = "month"), selected = "year", inline = TRUE)
+        ),
+        div(
+          class = "register-row",
+          span("Color By"),
+          selectInput(inputId = "color_by", label = NULL,
+                      choices = c("None" = "none", "Road User Type" = "mode", "Injury Severity" = "severity",
+                                  "County" = "county", "Crash Location" = "location"),
+                      selected = "none", width = "160px")
         )
       ),
       uiOutput("cluster_warning"),
@@ -936,13 +1009,14 @@ maps_page <- div(
     ),
     # Right Layout
     div(
+      class = "maps-right-col",
       div(
         class = "map-workspace-container",
-        leafletOutput("map", height = "500px")
+        leafletOutput("map", height = "500px"),
+        uiOutput("map_sample_note")
       ),
-      div(style = "margin-top: 36px;"),
       div(
-        style = "border-top: 1px solid var(--brand-border); padding-top: 16px;",
+        style = "border-top: 1px solid var(--brand-border); padding-top: 16px; margin-top: 20px;",
         plotlyOutput(outputId = "main_plot", height = "320px")
       )
     )
@@ -961,130 +1035,130 @@ methodology_page <- div(
       # MODEL SPECIFICATION
       div(class = "document-card-title", "Regression Discontinuity in Time"),
       div(class = "document-card document-card--model",
-                p(
-          "To estimate the causal effect of the implementation of AB 413 on crash frequency, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
-          tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
-          style = "color: var(--brand-ink); line-height: 1.7;"
-        ),
-        div(
-          style = "padding: 16px 0; text-align: center; font-size: 1.05rem;",
-          "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
-        )
+          p(
+            "To estimate the causal effect of the implementation of AB 413 on crash frequency, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
+            tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          ),
+          div(
+            style = "padding: 16px 0; text-align: center; font-size: 1.05rem;",
+            "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
+          )
       ),
       
       # VARIABLE DEFINITIONS
       div(class = "document-card-title", "Variable Definitions"),
       div(class = "document-card document-card--variable",
-                div(
-          class = "var-table-wrap",
-          tags$table(
-            class = "var-table",
-            tags$thead(
-              tags$tr(
-                tags$th("Variable"),
-                tags$th("Description"),
-                tags$th("Role in Analysis")
-              )
-            ),
-            tags$tbody(
-              tags$tr(
-                tags$td(class = "var-name", HTML("Y<sub>t</sub>")),
-                tags$td("Crash count (pedestrian/bicyclist collisions) at time t."),
-                tags$td(class = "var-role", "Dependent Variable")
+          div(
+            class = "var-table-wrap",
+            tags$table(
+              class = "var-table",
+              tags$thead(
+                tags$tr(
+                  tags$th("Variable"),
+                  tags$th("Description"),
+                  tags$th("Role in Analysis")
+                )
               ),
-              tags$tr(
-                tags$td(class = "var-name", HTML("D<sub>t</sub>")),
-                tags$td("Indicator equal to 1 for periods after the enforcement cutoff."),
-                tags$td(class = "var-role", "Key Independent Variable")
-              ),
-              tags$tr(
-                tags$td(class = "var-name", HTML("t &minus; t<sub>0</sub>")),
-                tags$td("Running variable: time elapsed relative to the cutoff date."),
-                tags$td(class = "var-role", "Running Variable")
-              ),
-              tags$tr(
-                tags$td(class = "var-name", HTML("&beta;<sub>1</sub>, &beta;<sub>2</sub>")),
-                tags$td("Slope terms allowing pre- and post-cutoff trends to differ."),
-                tags$td(class = "var-role", "Control")
-              ),
-              tags$tr(
-                tags$td(class = "var-name", "Season_t"),
-                tags$td("Categorical control for season, capturing seasonal variation in crash frequency."),
-                tags$td(class = "var-role", "Control")
-              ),
-              tags$tr(
-                tags$td(class = "var-name", HTML("h")),
-                tags$td("Bandwidth defining the estimation window around the cutoff, selected via MSE-optimal procedure."),
-                tags$td(class = "var-role", "Tuning Parameter")
-              ),
-              tags$tr(
-                tags$td(class = "var-name", HTML("&tau;")),
-                tags$td("Estimated treatment effect at the cutoff, the coefficient of interest."),
-                tags$td(class = "var-role", "Coefficient of Interest")
-              ),
-              tags$tr(
-                tags$td(class = "var-name", HTML("&epsilon;<sub>t</sub>")),
-                tags$td("Idiosyncratic error term."),
-                tags$td(class = "var-role", "Error Term")
+              tags$tbody(
+                tags$tr(
+                  tags$td(class = "var-name", HTML("Y<sub>t</sub>")),
+                  tags$td("Crash count (pedestrian/bicyclist collisions) at time t."),
+                  tags$td(class = "var-role", "Dependent Variable")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("D<sub>t</sub>")),
+                  tags$td("Indicator equal to 1 for periods after the enforcement cutoff."),
+                  tags$td(class = "var-role", "Key Independent Variable")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("t &minus; t<sub>0</sub>")),
+                  tags$td("Running variable: time elapsed relative to the cutoff date."),
+                  tags$td(class = "var-role", "Running Variable")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("&beta;<sub>1</sub>, &beta;<sub>2</sub>")),
+                  tags$td("Slope terms allowing pre- and post-cutoff trends to differ."),
+                  tags$td(class = "var-role", "Control")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", "Season_t"),
+                  tags$td("Categorical control for season, capturing seasonal variation in crash frequency."),
+                  tags$td(class = "var-role", "Control")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("h")),
+                  tags$td("Bandwidth defining the estimation window around the cutoff, selected via MSE-optimal procedure."),
+                  tags$td(class = "var-role", "Tuning Parameter")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("&tau;")),
+                  tags$td("Estimated treatment effect at the cutoff, the coefficient of interest."),
+                  tags$td(class = "var-role", "Coefficient of Interest")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("&epsilon;<sub>t</sub>")),
+                  tags$td("Idiosyncratic error term."),
+                  tags$td(class = "var-role", "Error Term")
+                )
               )
             )
           )
-        )
       ),
       
       # DATA SOURCE
       div(class = "document-card-title", "Data Source"),
       div(class = "document-card document-card--data",
-                p(
-          "Crash data comes from the Transportation Injury Mapping System (TIMS), filtered to pedestrian-involved collisions at intersections. ",
-          "Each observation is aggregated to a monthly count, with separate datasets built around each cutoff date to allow the pre- and post-period windows to be sized independently.",
-          style = "color: var(--brand-ink); line-height: 1.7;"
-        )
+          p(
+            "Crash data comes from the Transportation Injury Mapping System (TIMS), filtered to pedestrian-involved collisions at intersections. ",
+            "Each observation is aggregated to a monthly count, with separate datasets built around each cutoff date to allow the pre- and post-period windows to be sized independently.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          )
       ),
       
       # BANDWIDTH & KERNEL SELECTION
       div(class = "document-card-title", "Bandwidth & Kernel Selection"),
       div(class = "document-card document-card--bandwidth",
-                p(
-          "Because the RD estimate can be sensitive to the number of data points on either side of the cutoff, we tested a range of bandwidths and kernel choices and selected the specification that produced the most stable, lowest-variance estimates. See the Results page for the comparison across bandwidths.",
-          style = "color: var(--brand-ink); line-height: 1.7;"
-        )
+          p(
+            "Because the RD estimate can be sensitive to the number of data points on either side of the cutoff, we tested a range of bandwidths and kernel choices and selected the specification that produced the most stable, lowest-variance estimates. See the Results page for the comparison across bandwidths.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          )
       ),
       
       # ROBUSTNESS & VALIDITY CHECKS
       div(class = "document-card-title", "Robustness & Validity Checks"),
       div(class = "document-card document-card--robustness",
-                p(
-          "To make sure the estimated result reflects the true effect of the policy, we ran the following checks:",
-          style = "color: var(--brand-ink); line-height: 1.7;"
-        ),
-        tags$ul(
-          style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
-          tags$li(tags$strong("Placebo cutoffs. "), "We re-ran the same RDiT specification at dates with no policy meaning: January 2016, 2017, and 2018, to confirm the model does not estimate a jump at arbitrary dates."),
-          tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
-        )
+          p(
+            "To make sure the estimated result reflects the true effect of the policy, we ran the following checks:",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          ),
+          tags$ul(
+            style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
+            tags$li(tags$strong("Placebo cutoffs. "), "We re-ran the same RDiT specification at dates with no policy meaning: January 2016, 2017, and 2018, to confirm the model does not estimate a jump at arbitrary dates."),
+            tags$li(tags$strong("Covariate smoothness. "), "Using station-level NOAA weather data, we tested whether temperature and precipitation change abruptly at the cutoff dates. A real discontinuity should be specific to crashes. So, if weather also jumped at the same moment, that would point to a confound rather than a policy effect.")
+          )
       ),
       
       # HETEROGENEITY TESTS
       div(class = "document-card-title", "Heterogeneity Analysis"),
       div(class = "document-card document-card--heterogeneity",
-                p(
-          "With the understanding that a policy's effect on safety may not be uniform across different categories such as lighting condition and collision severity, we re-estimate the RDiT model separately within subgroups rather than assuming one effect applies everywhere:",
-          style = "color: var(--brand-ink); line-height: 1.7;"
-        ),
-        tags$ul(
-          style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
-          tags$li(tags$strong("By lighting condition. "), "Daylight vs. dark-time crashes, to test whether the effect concentrates in low-visibility conditions where daylighting theoretically matters most."),
-          tags$li(tags$strong("By crash severity. "), "Fatal, suspected serious injury, suspected minor injury, and possible injury/complaint of pain, to test whether the policy affects crash frequency broadly or is concentrated in specific outcomes.")
-        )
+          p(
+            "With the understanding that a policy's effect on safety may not be uniform across different categories such as lighting condition and collision severity, we re-estimate the RDiT model separately within subgroups rather than assuming one effect applies everywhere:",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          ),
+          tags$ul(
+            style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
+            tags$li(tags$strong("By lighting condition. "), "Daylight vs. dark-time crashes, to test whether the effect concentrates in low-visibility conditions where daylighting theoretically matters most."),
+            tags$li(tags$strong("By crash severity. "), "Fatal, suspected serious injury, suspected minor injury, and possible injury/complaint of pain, to test whether the policy affects crash frequency broadly or is concentrated in specific outcomes.")
+          )
       ),
       
       # CONCLUSION / CROSS-REFERENCE
       div(class = "document-card document-card--conclusion",
-        p(
-          "Each subgroup uses the same specification and cutoff dates as the primary model, applied to a filtered outcome variable. Full results for each subgroup are reported on the Results page.",
-          style = "color: var(--brand-ink); line-height: 1.7;"
-        )
+          p(
+            "Each subgroup uses the same specification and cutoff dates as the primary model, applied to a filtered outcome variable. Full results for each subgroup are reported on the Results page.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          )
       )
     ),
     
@@ -1093,7 +1167,7 @@ methodology_page <- div(
       value = "tobit",
       div(class = "document-card-title", "Tobit Model for Spatial Grid Analysis"),
       div(class = "document-card",
-                p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
+          p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
       )
     )
   )
@@ -1116,31 +1190,31 @@ results_page <- div(
       #--------------------------------------------------
       # Statewide Results
       #--------------------------------------------------
-
+      
+      div(
+        div(class = "document-card-title", "Statewide Pedestrian Outcome"),
         div(
-          div(class = "document-card-title", "Statewide Pedestrian Outcome"),
-          div(
-            class = "document-card",
-            p(
-              "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. Because these two estimates capture different comparisons (pre-policy vs. warning period, and warning period vs. enforcement), they shouldn't be read as repeated measures of the same effect; rather, the presence of a significant effect at both points suggests a safety benefit emerged as soon as the law took effect.",
-              style = "line-height:1.8;"
-            )
+          class = "document-card",
+          p(
+            "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. Because these two estimates capture different comparisons (pre-policy vs. warning period, and warning period vs. enforcement), they shouldn't be read as repeated measures of the same effect; rather, the presence of a significant effect at both points suggests a safety benefit emerged as soon as the law took effect.",
+            style = "line-height:1.8;"
           )
+        )
+      ),
+      
+      div(
+        div(class = "document-card-title", "RDiT Plot: Pedestrian Crashes at Intersections"),
+        div(
+          class = "document-card",
+          plotOutput("statewide_rd_plot", height = "360px")
         ),
         
+        div(class = "document-card-title", "Model Estimates"),
         div(
-          div(class = "document-card-title", "RDiT Plot: Pedestrian Crashes at Intersections"),
-          div(
-            class = "document-card",
-            plotOutput("statewide_rd_plot", height = "360px")
-          ),
-          
-          div(class = "document-card-title", "Model Estimates"),
-          div(
-            class = "document-card",
-            uiOutput("statewide_results_table")   
-          )
-        ),
+          class = "document-card",
+          uiOutput("statewide_results_table")   
+        )
+      ),
       
       div(
         div(class = "document-card-title", "Statewide Bicyclist Outcome"),
@@ -1206,7 +1280,7 @@ results_page <- div(
           style = "line-height:1.8;"
         ),
         uiOutput("weather_results_table")
-        ),
+      ),
       
       hr(class = "double-hr"),
       
@@ -1281,7 +1355,7 @@ about_page <- div(
     style = "display: flex; justify-content: space-around; flex-wrap: wrap; gap: 32px; padding: 32px 28px;",
     team_member_card(
       name = "Kyle Klemba",
-      description = "Data science & Economics, College of William & Mary"
+      description = "Data Science & Economics, William & Mary"
     ),
     team_member_card(
       name = "Pride Akana Techa",
@@ -1297,8 +1371,9 @@ about_page <- div(
     class = "document-card",
     style = "display: flex; justify-content: center; padding: 32px 28px;",
     team_member_card(
+      img_src = "yuanyuan.JPG",
       name = "Yuanyuan Wen",
-      description = "Graduate Mentor"
+      description = "Department of Agricultural and Applied Economics, Virginia Tech"
     )
   ),
   
@@ -1310,12 +1385,25 @@ about_page <- div(
     class = "document-card",
     style = "display: flex; justify-content: space-around; flex-wrap: wrap; gap: 32px; padding: 32px 28px;",
     team_member_card(
+      img_src = "drgao.png",
       name = "Dr. Yujuan Gao",
-      description =  "Faculty Mentor"
-          ),
+      description =  "Department of Agricultural and Applied Economics, Virginia Tech"
+    ),
     team_member_card(
+      img_src = "drcary.jpg",
       name = "Dr. Michael Cary",
-      description = "Faculty Mentor"
+      description = "Department of Agricultural and Applied Economics, Virginia Tech"
+    )
+  ),
+  # ======================================================
+  # 5. Calwalks
+  # ======================================================
+  div(class = "document-card-title", "California Walks"),
+  div(
+    class = "document-card",
+    p(
+      "\"California Walks makes communities across our state more walkable. We champion safe, inclusive, and enjoyable streets and public spaces for all Californians. California Walks drives transformative policy change, empowers local advocates, and supports community-led design to make every street safe and welcoming.\"",
+      style = "line-height:1.8;"
     )
   )
 )
@@ -1444,14 +1532,20 @@ server <- function(input, output, session) {
     bindCache(input$victim_type, input$mode, input$location_type,
               input$collision_severity, input$county, date_range_debounced())
   
+  # debounce the map-facing data an extra step so rapid filter toggles
+  # (e.g. clicking multiple checkboxes quickly) coalesce into one redraw
+  filtered_data_map_debounced <- filtered_data_map %>% debounce(200)
+  
   output$cluster_warning <- renderUI({
     data_map <- filtered_data_map()
-    req(nrow(data_map) > 50000)
+    req(nrow(data_map) > MAX_CLUSTER_POINTS)
     div(
       style = "font-family: monospace; font-size: 0.75rem; color: #7A5205; background: #FCF1DA; padding: 10px; margin-top: 12px; border: 1px solid #F5E0B7; border-radius:3px;",
-      "Clusters only display below 50,000 points. Current selection is ",
+      "Individual/clustered points only display below ",
+      scales::comma(MAX_CLUSTER_POINTS),
+      " records to keep the map responsive. Current selection is ",
       scales::comma(nrow(data_map)),
-      " points."
+      " points — showing the heatmap layer instead."
     )
   })
   
@@ -1477,41 +1571,132 @@ server <- function(input, output, session) {
         config(displaylogo = FALSE)
     } else {
       plot_data <- filtered_data_graph() %>% filter(!is.na(COLLISION_DATE))
+      period_var <- if (input$granularity == "year") "year" else "month"
       
-      if (input$granularity == "year") {
+      color_choice <- if (is.null(input$color_by)) "none" else input$color_by
+      
+      if (color_choice == "none") {
+        
         summary_data <- plot_data %>%
-          group_by(ACCIDENT_PERIOD = year) %>%
+          group_by(ACCIDENT_PERIOD = .data[[period_var]]) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
           arrange(ACCIDENT_PERIOD)
-        x_title <- "year"
+        
+        plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD) %>%
+          add_trace(
+            y = ~Total_Accidents,
+            type = "bar",
+            name = "Incidents",
+            marker = list(color = brand$muted)
+          ) %>%
+          layout(
+            margin = list(t = 10, b = 40, l = 40, r = 10),
+            xaxis = list(title = "", showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+            yaxis = list(title = "Incident Count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+            plot_bgcolor  = "rgba(0,0,0,0)",
+            paper_bgcolor = "rgba(0,0,0,0)"
+          ) %>%
+          config(displayModeBar = FALSE)
+        
       } else {
+        
+        # Secondary color-aggregation: split each period's bar into a stacked
+        # breakdown by road-user type, injury severity, county, or crash location.
+        if (color_choice == "mode") {
+          plot_data <- plot_data %>%
+            mutate(Category = case_when(
+              PEDESTRIAN_ACCIDENT == "Y" & BICYCLE_ACCIDENT == "Y" ~ "Pedestrian & Bicyclist",
+              PEDESTRIAN_ACCIDENT == "Y" ~ "Pedestrian Only",
+              BICYCLE_ACCIDENT == "Y" ~ "Bicyclist Only",
+              TRUE ~ "Other"
+            ))
+          category_order <- c("Pedestrian Only", "Bicyclist Only", "Pedestrian & Bicyclist", "Other")
+          category_colors <- c(
+            "Pedestrian Only" = brand$navy,
+            "Bicyclist Only" = brand$accent,
+            "Pedestrian & Bicyclist" = brand$muted,
+            "Other" = brand$border
+          )
+        } else if (color_choice == "severity") {
+          plot_data <- plot_data %>%
+            mutate(Category = dplyr::recode(as.character(COLLISION_SEVERITY), !!!severity_labels_rev, .default = "Unknown"))
+          category_order <- c("Fatal Injury", "Serious Injury", "Minor Injury", "Complaint of Pain", "Unknown")
+          category_colors <- c(
+            "Fatal Injury" = "#8B1E1E",
+            "Serious Injury" = brand$accent,
+            "Minor Injury" = "#3b528b",
+            "Complaint of Pain" = brand$muted,
+            "Unknown" = brand$border
+          )
+        } else if (color_choice == "county") {
+          # Only the top N counties (by record count in the current filtered
+          # selection) get their own color; everything else rolls into "Other".
+          top_counties <- plot_data %>%
+            filter(!is.na(COUNTY)) %>%
+            dplyr::count(COUNTY, sort = TRUE) %>%
+            dplyr::slice_head(n = TOP_N_COUNTIES) %>%
+            dplyr::pull(COUNTY) %>%
+            as.character()
+          
+          plot_data <- plot_data %>%
+            mutate(Category = ifelse(!is.na(COUNTY) & as.character(COUNTY) %in% top_counties,
+                                     as.character(COUNTY), "Other Counties"))
+          category_order <- c(top_counties, "Other Counties")
+          county_palette <- if (length(top_counties) > 0) scales::hue_pal()(length(top_counties)) else character(0)
+          category_colors <- setNames(c(county_palette, brand$border), category_order)
+        } else if (color_choice == "location") {
+          plot_data <- plot_data %>%
+            mutate(Category = case_when(
+              INTERSECTION == "Y" ~ "Intersection",
+              INTERSECTION == "N" ~ "Non-Intersection",
+              TRUE ~ "Unknown"
+            ))
+          category_order <- c("Intersection", "Non-Intersection", "Unknown")
+          category_colors <- c(
+            "Intersection" = brand$navy,
+            "Non-Intersection" = brand$accent,
+            "Unknown" = brand$border
+          )
+        } else {
+          plot_data <- plot_data %>% mutate(Category = "Incidents")
+          category_order <- c("Incidents")
+          category_colors <- c("Incidents" = brand$muted)
+        }
+        
         summary_data <- plot_data %>%
-          group_by(ACCIDENT_PERIOD = month) %>%
+          group_by(ACCIDENT_PERIOD = .data[[period_var]], Category) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
-          arrange(ACCIDENT_PERIOD)
-        x_title <- "month"
-      }
-      
-      plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD) %>%
-        add_trace(
-          y = ~Total_Accidents,
-          type = "bar",
-          name = "Incidents",
-          marker = list(color = brand$muted)
-        ) %>%
-        layout(
+          mutate(Category = factor(Category, levels = category_order)) %>%
+          arrange(ACCIDENT_PERIOD, Category)
+        
+        p <- plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD)
+        
+        for (cat in intersect(category_order, unique(as.character(summary_data$Category)))) {
+          cat_data <- summary_data %>% filter(Category == cat)
+          p <- p %>% add_trace(
+            data = cat_data,
+            x = ~ACCIDENT_PERIOD, y = ~Total_Accidents,
+            type = "bar", name = cat,
+            marker = list(color = category_colors[[cat]])
+          )
+        }
+        
+        p %>% layout(
+          barmode = "stack",
           margin = list(t = 10, b = 40, l = 40, r = 10),
+          legend = list(font = list(family = "monospace", size = 10)),
           xaxis = list(title = "", showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
           yaxis = list(title = "Incident Count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
           plot_bgcolor  = "rgba(0,0,0,0)",
           paper_bgcolor = "rgba(0,0,0,0)"
         ) %>%
-        config(displayModeBar = FALSE)
+          config(displayModeBar = FALSE)
+      }
     }
   })
   
   output$map <- renderLeaflet({
-    leaflet(options = leafletOptions(attributionControl = FALSE)) %>%
+    leaflet(options = leafletOptions(attributionControl = FALSE, preferCanvas = TRUE)) %>%
       addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
       addPolygons(
         data = ca_boundary,
@@ -1521,15 +1706,9 @@ server <- function(input, output, session) {
       addLayersControl(
         overlayGroups = c("Accident Heatmap", "Accident Clusters"),
         options = layersControlOptions(collapsed = TRUE)
-      )
+      ) %>%
+      setView(lng = -119.4179, lat = 36.7783, zoom = 6)
   })
-  
-  severity_labels <- c(
-    "Fatal Injury" = "1",
-    "Serious Injury" = "2",
-    "Minor Injury" = "3",
-    "Complaint of Pain" = "4"
-  )
   
   # Updates dropdown menus safely on initialization
   observe({
@@ -1545,24 +1724,36 @@ server <- function(input, output, session) {
   
   # Updates spatial markers on mapping filters change
   observe({
-    coords <- filtered_data_map()
+    coords <- filtered_data_map_debounced()
+    n_total <- nrow(coords)
+    
     proxy <- leafletProxy("map") %>%
       clearHeatmap() %>%
       clearGroup("Accident Heatmap") %>%
-      clearGroup("Accident Clusters") %>%
-      clearGlLayers()
+      clearGroup("Accident Clusters")
     
-    if (nrow(coords) > 0) {
-      coords_sf <- st_as_sf(coords, coords = c("lng", "lat"), crs = 4326, remove = FALSE)
+    if (n_total > 0) {
+      # Cap the heatmap layer too — huge point counts slow WebGL heat
+      # rendering and are a common source of browser tab crashes.
+      heat_data <- if (n_total > MAX_MAP_POINTS) {
+        dplyr::slice_sample(coords, n = MAX_MAP_POINTS)
+      } else
+    {
+        coords
+      }
+      
       proxy <- proxy %>%
         addHeatmap(
-          data = coords, lng = ~lng, lat = ~lat,
+          data = heat_data, lng = ~lng, lat = ~lat,
           blur = 22, max = 0.02, radius = 14,
           gradient = c("0.2" = "#440154", "0.4" = "#3b528b",
                        "0.6" = "#21918c", "0.8" = "#5ec962", "1.0" = "#fde725"),
           group = "Accident Heatmap"
         )
-      if (nrow(coords) <= 50000) {
+      
+      # Clustered individual markers only for smaller selections — this is
+      # the layer most likely to freeze or crash the browser at high volume.
+      if (n_total <= MAX_CLUSTER_POINTS) {
         proxy %>% addCircleMarkers(
           data = coords, lng = ~lng, lat = ~lat,
           radius = 3, stroke = TRUE, color = "white", weight = 0.5,
@@ -1572,7 +1763,18 @@ server <- function(input, output, session) {
         )
       }
     }
+    
+    output$map_sample_note <- renderUI({
+      req(n_total > MAX_MAP_POINTS)
+      div(
+        class = "map-loading-note",
+        "Heatmap rendered from a ", scales::comma(MAX_MAP_POINTS),
+        "-point sample of ", scales::comma(n_total),
+        " matching records for performance."
+      )
+    })
   })
+  
   
   observe({
     proxy <- leafletProxy("map")
@@ -1683,7 +1885,7 @@ server <- function(input, output, session) {
             tags$th("p-value"),
             tags$th("Std. Error"),
             tags$th("95% CI")
-            )
+          )
         ),
         tags$tbody(
           purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
@@ -1875,7 +2077,7 @@ server <- function(input, output, session) {
   
   # Weather Analysis Table
   output$weather_results_table <- renderUI({
-   
+    
     results_df <- tibble::tibble(
       Covariate   = c("Temperature", "Temperature",
                       "Precipitation", "Precipitation"),
