@@ -24,7 +24,7 @@ school_data <- readRDS("initial-analysis/data-clean/school_data.rds")
 
 school_ped <- school_data |> 
   filter(ACCIDENT_YEAR %in% c(2023, 2024, 2025)) |> 
-  filter(in_school_zone == "TRUE")
+  filter(in_school_zone == TRUE)
 
 
 ## Jan 2024 Cutoff ##
