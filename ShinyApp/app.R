@@ -630,6 +630,64 @@ p_2025 <- make_cutoff_plot(
 
 statewide_rdit_plot <- p_2024 + p_2025
 
+# ==========================================================================
+# Placebo Tests
+# ==========================================================================
+
+placebo_results <- tibble(
+  cutoff = c("Jan 2015", "Jan 2016", "Jan 2017", "Jan 2018",
+             "Jan 2019", "Jan 2022", "Jan 2023"),
+  estimate = c(-76.197, -103.704, -68.854, -20.075,
+               -58.669, -66.568, -49.719),
+  ci_low = c(-124.301, -192.909, -203.998, -90.508,
+             -146.671, -92.476, -79.862),
+  ci_high = c(4.235, -25.260, 39.906, 76.878,
+              29.847, -2.311, 8.596),
+  p_value = c(0.067, 0.011, 0.187, 0.873,
+              0.195, 0.039, 0.114)
+) |>
+  mutate(
+    cutoff = factor(cutoff, levels = rev(cutoff)),
+    significant = if_else(
+      p_value < 0.05,
+      "Significant at the 5% level",
+      "Not significant"
+    )
+  )
+
+placebo_plot <- ggplot(placebo_results,
+                       aes(x = estimate, y = cutoff)) +
+  geom_vline(xintercept = 0,
+             color = "#EAF1F4",
+             linewidth = 0.4) +
+  geom_errorbar(
+    aes(xmin = ci_low,
+        xmax = ci_high,
+        color = significant),
+    height = 0.15,
+    linewidth = 0.8
+  ) +
+  geom_point(aes(color = significant),
+             size = 3) +
+  scale_color_manual(
+    values = c(
+      "Significant at the 5% level" = "#C16200",
+      "Not significant" = "#003B5C"
+    )
+  ) +
+  labs(
+    title = "Placebo Cutoff Tests",
+    x = "Estimated RD Effect",
+    y = NULL,
+    color = NULL
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  )
+
 
 # ==========================================================================
 # Shared Input Component Layout
@@ -1060,7 +1118,7 @@ results_page <- div(
       #--------------------------------------------------
 
         div(
-          div(class = "document-card-title", "Statewide Results"),
+          div(class = "document-card-title", "Statewide Pedestrian Outcome"),
           div(
             class = "document-card",
             p(
@@ -1071,7 +1129,7 @@ results_page <- div(
         ),
         
         div(
-          div(class = "document-card-title", "Regression Discontinuity Plot"),
+          div(class = "document-card-title", "RDiT Plot: Pedestrian Crashes at Intersections"),
           div(
             class = "document-card",
             plotOutput("statewide_rd_plot", height = "360px")
@@ -1083,6 +1141,19 @@ results_page <- div(
             uiOutput("statewide_results_table")   
           )
         ),
+      
+      div(
+        div(class = "document-card-title", "Statewide Bicyclist Outcome"),
+        div(
+          class = "document-card",
+          p(
+            "We did not find clear evidence that AB 413 led to an immediate change in bicycle crash counts at intersections following either the January 2024 implementation of the law or the January 2025 start of statewide enforcement. Although the estimated effects suggested a decrease in bicycle crashes after the law took effect and a slight increase after enforcement began, neither change was statistically significant. This contrasts with the pedestrian crash analysis, where statistically significant reductions were observed at both policy milestones. Together, these findings suggest that while AB 413 appears to have had an early positive effect on pedestrian safety, a similar short-term impact on bicycle crashes was not evident in the available data.",
+            style = "line-height:1.8;"
+          ),
+          
+          uiOutput("bicyclist_results_table")
+        )
+      ),
       
       hr(class = "double-hr"),
       
@@ -1116,10 +1187,10 @@ results_page <- div(
       div(
         class = "document-card",
         p(
-          "We use a 12-month bandwidth in the main specification. The binding constraint is data availability: at the January 2025 cutoff, only 12 months of post-period data are currently observed, so 12 months is the widest symmetric window available for that cutoff, and we apply it to both cutoffs for comparability. Figure 10 indicates that this choice falls within the range where estimates are both precise and stable. Table 6 reports the main results at 10- and 11-month bandwidths as a robustness check. The point estimates are similar in magnitude, though standard errors are larger at the narrower bandwidths, and the estimates are no longer significant at the 5% level. Because the point estimates move little, the loss of significance appears to reflect the reduced number of post-period observations rather than instability in the estimated effect.",
+          "We use a 12-month bandwidth in the main specification. The binding constraint is data availability: at the January 2025 cutoff, only 12 months of post-period data are currently observed, so 12 months is the widest symmetric window available for that cutoff, and we apply it to both cutoffs for comparability. This choice falls within the range where estimates are both precise and stable. The table below reports the main results at 10- and 11-month bandwidths as a robustness check. The point estimates are similar in magnitude, though standard errors are larger at the narrower bandwidths, and the estimates are no longer significant at the 5% level. Because the point estimates move little, the loss of significance appears to reflect the reduced number of post-period observations rather than instability in the estimated effect.",
           style = "line-height:1.8;"
         ),
-        plotOutput("bandwidth_plot", height = "350px")
+        uiOutput("bandwidth_results_table")
       ),
       
       hr(class = "double-hr"),
@@ -1131,15 +1202,11 @@ results_page <- div(
       div(
         class = "document-card",
         p(
-          "Placeholder paragraph discussing the continuity of precipitation and temperature across the policy cutoff.",
+          "As a covariate smoothness check, we tested whether temperature(°F) and precipitation(inches) showed a discontinuity at the policy cutoffs, since a genuine confound would likely show up as a change in observable conditions, not just crashes. Neither covariate showed a significant break at Jan 2024 or Jan 2025, supporting that the cutoffs are not conflated with a shift in weather patterns.",
           style = "line-height:1.8;"
         ),
-        layout_columns(
-          col_widths = c(6, 6),
-          plotOutput("temperature_plot", height = "300px"),
-          plotOutput("precipitation_plot", height = "300px")
-        )
-      ),
+        uiOutput("weather_results_table")
+        ),
       
       hr(class = "double-hr"),
       
@@ -1150,7 +1217,7 @@ results_page <- div(
       div(
         class = "document-card",
         p(
-          "Placeholder paragraph discussing placebo cutoff results at dates with no policy meaning (e.g., January 2016, 2017, and 2018), confirming the model does not estimate a spurious jump at arbitrary dates.",
+          "To assess whether the estimated policy effects are driven by the implementation of AB 413 rather than arbitrary temporal variation, we repeated the Regression Discontinuity in Time analysis at several placebo cutoff dates for which no policy intervention occurred. Most placebo estimates are statistically insignificant and their confidence intervals include zero, indicating that the model does not systematically detect discontinuities when no treatment is present. Although significant effects are observed for January 2016 and January 2022, these isolated findings are not part of a consistent pattern across placebo years and likely reflect unrelated temporal variation. Overall, the placebo analysis provides additional support that the significant discontinuities observed at the January 2024 and January 2025 policy cutoffs could be attributable to the implementation of AB 413.",
           style = "line-height:1.8;"
         ),
         plotOutput("placebo_plot", height = "350px")
@@ -1540,10 +1607,10 @@ server <- function(input, output, session) {
     results_df <- tibble::tibble(
       Cutoff       = c("January 2024", "January 2025"),
       Estimate     = c(two_year_model$coef["Robust", 1], rd_model3$coef["Robust", 1]),
+      `p-value`    = c(two_year_model$pv["Robust", 1],   rd_model3$pv["Robust", 1]),
       `Std. Error` = c(two_year_model$se["Robust", 1],   rd_model3$se["Robust", 1]),
       CI_lower     = c(two_year_model$ci["Robust", 1],   rd_model3$ci["Robust", 1]),
-      CI_upper     = c(two_year_model$ci["Robust", 2],   rd_model3$ci["Robust", 2]),
-      `p-value`    = c(two_year_model$pv["Robust", 1],   rd_model3$pv["Robust", 1])
+      CI_upper     = c(two_year_model$ci["Robust", 2],   rd_model3$ci["Robust", 2])
     )
     
     sig_stars <- function(p) {
@@ -1560,9 +1627,9 @@ server <- function(input, output, session) {
           tags$tr(
             tags$th("Cutoff"),
             tags$th("Estimate"),
+            tags$th("p-value"),
             tags$th("Std. Error"),
-            tags$th("95% CI"),
-            tags$th("p-value")
+            tags$th("95% CI")
           )
         ),
         tags$tbody(
@@ -1571,12 +1638,65 @@ server <- function(input, output, session) {
             tags$tr(
               tags$td(class = "cutoff-name", Cutoff),
               tags$td(
-                sprintf("%.2f", Estimate),
+                sprintf("%.3f", Estimate),
                 if (stars != "") tags$span(class = "sig-stars", stars)
               ),
-              tags$td(sprintf("%.2f", `Std. Error`)),
-              tags$td(sprintf("[%.2f, %.2f]", CI_lower, CI_upper)),
-              tags$td(sprintf("%.2f", `p-value`))
+              tags$td(sprintf("%.3f", `p-value`)),
+              tags$td(sprintf("%.3f", `Std. Error`)),
+              tags$td(sprintf("[%.3f, %.3f]", CI_lower, CI_upper))
+            )
+          })
+        )
+      ),
+      tags$p(
+        class = "results-table-note",
+        "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level."
+      )
+    )
+  })
+  
+  # Bicyclist Crash Outcome
+  output$bicyclist_results_table <- renderUI({
+    results_df <- tibble::tibble(
+      Cutoff       = c("January 2024", "January 2025"),
+      Estimate     = c(-38.669, 21.470),
+      `p-value`    = c(0.778, 0.283),
+      `Std. Error` = c(56.256, 64.348),
+      CI_lower     = c(-126.120, -57.071),
+      CI_upper     = c(-94.402, 195.168)
+    )
+    
+    sig_stars <- function(p) {
+      if (p < 0.01) "***"
+      else if (p < 0.05) "**"
+      else if (p < 0.10) "*"
+      else ""
+    }
+    
+    tagList(
+      tags$table(
+        class = "results-table",
+        tags$thead(
+          tags$tr(
+            tags$th("Cutoff"),
+            tags$th("Estimate"),
+            tags$th("p-value"),
+            tags$th("Std. Error"),
+            tags$th("95% CI")
+            )
+        ),
+        tags$tbody(
+          purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
+            stars <- sig_stars(`p-value`)
+            tags$tr(
+              tags$td(class = "cutoff-name", Cutoff),
+              tags$td(
+                sprintf("%.3f", Estimate),
+                if (stars != "") tags$span(class = "sig-stars", stars)
+              ),
+              tags$td(sprintf("%.3f", `p-value`)),
+              tags$td(sprintf("%.3f", `Std. Error`)),
+              tags$td(sprintf("[%.3f, %.3f]", CI_lower, CI_upper))
             )
           })
         )
@@ -1666,7 +1786,7 @@ server <- function(input, output, session) {
             tags$th("Category"),
             tags$th("Sub-category"),
             tags$th("Cutoff"),
-            tags$th("RD Effect"),
+            tags$th("Estimate"),
             tags$th("p-value"),
             tags$th("Std. Error"),
             tags$th("95% CI")
@@ -1679,6 +1799,192 @@ server <- function(input, output, session) {
         "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level."
       )
     )
+  })
+  
+  # Bandwidth sensitivity
+  output$bandwidth_results_table <- renderUI({
+    bw_df <- tibble::tribble(
+      ~Cutoff,       ~Bandwidth,    ~Estimate, ~pval, ~se,    ~ci_lo,    ~ci_hi,
+      "Jan 2024",    "10 months",   -76.811,   0.174, 51.667, -171.539,   30.990,
+      "Jan 2024",    "11 months",   -74.540,   0.064, 40.298, -153.729,    4.237,
+      "Jan 2024",    "12 months",   -77.632,   0.021, 32.295, -137.677,  -11.083,
+      "Jan 2025",    "10 months",   -66.904,   0.163, 45.518, -152.770,   25.657,
+      "Jan 2025",    "11 months",   -64.522,   0.049, 36.090, -141.641,   -0.171,
+      "Jan 2025",    "12 months",   -62.143,   0.023, 32.122, -135.933,  -10.017
+    )
+    
+    sig_stars <- function(p) {
+      if (p < 0.01) "***"
+      else if (p < 0.05) "**"
+      else if (p < 0.10) "*"
+      else ""
+    }
+    
+    cutoff_spans <- bw_df %>% dplyr::count(Cutoff, name = "n")
+    
+    rows <- list()
+    cutoff_seen <- character(0)
+    
+    for (i in seq_len(nrow(bw_df))) {
+      row <- bw_df[i, ]
+      stars <- sig_stars(row$pval)
+      
+      cutoff_cell <- if (!(row$Cutoff %in% cutoff_seen)) {
+        cutoff_seen <- c(cutoff_seen, row$Cutoff)
+        tags$td(
+          class = "group-cell",
+          rowspan = cutoff_spans$n[cutoff_spans$Cutoff == row$Cutoff],
+          row$Cutoff
+        )
+      } else NULL
+      
+      rows[[i]] <- tags$tr(
+        cutoff_cell,
+        tags$td(class = "subgroup-cell", row$Bandwidth),
+        tags$td(
+          sprintf("%.3f", row$Estimate),
+          if (stars != "") tags$span(class = "sig-stars", stars)
+        ),
+        tags$td(sprintf("%.3f", row$pval)),
+        tags$td(sprintf("%.3f", row$se)),
+        tags$td(sprintf("[%.3f, %.3f]", row$ci_lo, row$ci_hi))
+      )
+    }
+    
+    tagList(
+      tags$table(
+        class = "results-table",
+        tags$thead(
+          tags$tr(
+            tags$th("Cutoff"),
+            tags$th("Bandwidth"),
+            tags$th("Estimate"),
+            tags$th("p-value"),
+            tags$th("Std. Error"),
+            tags$th("95% CI")
+          )
+        ),
+        tags$tbody(rows)
+      ),
+      tags$p(
+        class = "results-table-note",
+        "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level."
+      )
+    )
+  })
+  
+  # Weather Analysis Table
+  output$weather_results_table <- renderUI({
+   
+    results_df <- tibble::tibble(
+      Covariate   = c("Temperature", "Temperature",
+                      "Precipitation", "Precipitation"),
+      Cutoff      = c("January 2024", "January 2025",
+                      "January 2024", "January 2025"),
+      Estimate    = c(-3.324, -0.913,
+                      2.440, -1.520),
+      `p-value`   = c(0.949, 0.402,
+                      0.108, 0.258),
+      `Std. Error`= c(4.986, 7.257,
+                      1.416, 2.935),
+      CI_lower    = c(-9.455, -8.143,
+                      -0.497, -9.070),
+      CI_upper    = c(10.089, 20.303,
+                      5.053, 2.435)
+    )
+    
+    sig_stars <- function(p) {
+      if (p < 0.01) "***"
+      else if (p < 0.05) "**"
+      else if (p < 0.10) "*"
+      else ""
+    }
+    
+    tagList(
+      
+      tags$table(
+        class = "results-table",
+        
+        tags$thead(
+          tags$tr(
+            tags$th("Covariate"),
+            tags$th("Cutoff"),
+            tags$th("Estimate"),
+            tags$th("p-value"),
+            tags$th("Std. Error"),
+            tags$th("95% CI")
+          )
+        ),
+        
+        tags$tbody(
+          
+          # Temperature
+          tags$tr(
+            tags$td(class = "group-cell",
+                    rowspan = 2,
+                    "Temperature"),
+            tags$td(class = "cutoff-name", "January 2024"),
+            tags$td(
+              sprintf("%.3f", -3.324),
+              tags$span(class = "sig-stars", sig_stars(0.949))
+            ),
+            tags$td(sprintf("%.3f", 0.949)),
+            tags$td(sprintf("%.3f", 4.986)),
+            tags$td(sprintf("[%.3f, %.3f]", -9.455, 10.089))
+          ),
+          
+          tags$tr(
+            tags$td(class = "cutoff-name", "January 2025"),
+            tags$td(
+              sprintf("%.3f", -0.913),
+              tags$span(class = "sig-stars", sig_stars(0.402))
+            ),
+            tags$td(sprintf("%.3f", 0.402)),
+            tags$td(sprintf("%.3f", 7.257)),
+            tags$td(sprintf("[%.3f, %.3f]", -8.143, 20.303))
+          ),
+          
+          # Precipitation
+          tags$tr(
+            tags$td(class = "group-cell",
+                    rowspan = 2,
+                    "Precipitation"),
+            tags$td(class = "cutoff-name", "January 2024"),
+            tags$td(
+              sprintf("%.3f", 2.440),
+              tags$span(class = "sig-stars", sig_stars(0.108))
+            ),
+            tags$td(sprintf("%.3f", 0.108)),
+            tags$td(sprintf("%.3f", 1.416)),
+            tags$td(sprintf("[%.3f, %.3f]", -0.497, 5.053))
+          ),
+          
+          tags$tr(
+            tags$td(class = "cutoff-name", "January 2025"),
+            tags$td(
+              sprintf("%.3f", -1.520),
+              tags$span(class = "sig-stars", sig_stars(0.258))
+            ),
+            tags$td(sprintf("%.3f", 0.258)),
+            tags$td(sprintf("%.3f", 2.935)),
+            tags$td(sprintf("[%.3f, %.3f]", -9.070, 2.435))
+          )
+          
+        )
+      ),
+      
+      tags$p(
+        class = "results-table-note",
+        "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level."
+      )
+      
+    )
+    
+  })
+  
+  # Placebo Results
+  output$placebo_plot <- renderPlot({
+    placebo_plot
   })
   
 }
