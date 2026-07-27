@@ -53,9 +53,11 @@ ggplot(aes(x = date, y = mean_temp)) +
 
 
 ## Temperature RDiT ##
+## 1. Jan 2024
 
 # Prepare temperature data for RDiT
 temp_rdit <- monthly_temp |>
+  filter(year %in% c(2023, 2024)) |> 
   mutate(date = as.Date(paste(year, month, "01", sep = "-")),
          cutoff    = as.Date("2024-01-01"),
          Time_temp = interval(cutoff, date) %/% months(1),
@@ -78,7 +80,7 @@ temp_model <- rdrobust(y = temp_rdit$mean_temp,
                       covs = model.matrix(~ Season_factor, temp_rdit)[, -1],
                       c = 0,
                       p = 1,
-                      h = 24,
+                      h = 12,
                       kernel = "triangular")
 
 summary(temp_model)
@@ -95,9 +97,9 @@ temp_rd_out <- rdplot(y = temp_rdit$mean_temp_adj,
                  x = temp_rdit$Time_temp,
                  c = 0,
                  p = 1,
-                 h = 24,
+                 h = 12,
                  kernel = "triangular",
-                 nbins = c(24, 24))
+                 nbins = c(12, 12))
 
 temp_rd_out$rdplot +
   labs(title = "Control RDiT Model",
@@ -118,7 +120,7 @@ ggsave(filename = "initial-analysis/figs/temp_rdit.png",
 # Jan 2025 Temp -----------------------------------------------------------
 
 temp_rdit25 <- monthly_temp |>
-  filter(year >= "2024") |> 
+  filter(year %in% c(2024, 2025)) |> 
   mutate(date = as.Date(paste(year, month, "01", sep = "-")),
          cutoff    = as.Date("2025-01-01"),
          Time_temp = interval(cutoff, date) %/% months(1),
@@ -217,9 +219,11 @@ monthly_ppt |>
 
 
 ## Precipitation RDiT ##
+## 1. Jan 2024
 
 # Prepare precipitation data for RDiT
 ppt_rdit <- monthly_ppt |>
+  filter(year %in% c(2023, 2024)) |> 
   mutate(date = as.Date(paste(year, month, "01", sep = "-")),
          cutoff    = as.Date("2024-01-01"),
          Time_ppt = interval(cutoff, date) %/% months(1),
@@ -242,7 +246,7 @@ ppt_model <- rdrobust(y = ppt_rdit$mean_ppt,
                        covs = model.matrix(~ Season_factor, ppt_rdit)[, -1],
                        c = 0,
                        p = 1,
-                       h = 24,
+                       h = 12,
                        kernel = "triangular")
 
 summary(ppt_model)
@@ -259,9 +263,9 @@ ppt_rd_out <- rdplot(y = ppt_rdit$mean_ppt_adj,
                       x = ppt_rdit$Time_ppt,
                       c = 0,
                       p = 1,
-                      h = 24,
+                      h = 12,
                       kernel = "triangular",
-                      nbins = c(24, 24))
+                      nbins = c(12, 12))
 
 ppt_rd_out$rdplot +
   labs(title = "Control RDiT Model",
@@ -278,51 +282,11 @@ ggsave(filename = "initial-analysis/figs/ppt_rdit.png",
        width = 20)
 
 
-## Model 2: Quadratic
-
-ppt_model2 <- rdrobust(y = ppt_rdit$mean_ppt,
-                      x = ppt_rdit$Time_ppt,
-                      covs = model.matrix(~ Season_factor, ppt_rdit)[, -1],
-                      c = 0,
-                      p = 2,
-                      h = 24,
-                      kernel = "uniform")
-
-summary(ppt_model2)
-
-# Adjust for seasonality
-ppt_season_model2 <- lm(mean_ppt ~ Season_factor,
-                       data = ppt_rdit)
-
-ppt_rdit$mean_ppt_adj <- resid(ppt_season_model2) + 
-  mean(ppt_rdit$mean_ppt)
-
-# RDiT plot
-ppt_rd_out2 <- rdplot(y = ppt_rdit$mean_ppt_adj,
-                     x = ppt_rdit$Time_ppt,
-                     c = 0,
-                     p = 2,
-                     h = 24,
-                     kernel = "uniform",
-                     nbins = c(24, 24))
-
-ppt_rd_out2$rdplot +
-  labs(title = "Control RDiT Model",
-       y = "Precipitation (inches)",
-       x = "Months Relative to Jan 2024") +
-  theme(
-    plot.title = element_text(size = 18, face = "bold"),
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.title.y = element_text(size = 14, face = "bold")
-  )
-
-
-
-# Jan 2025 Ppt ------------------------------------------------------------
+## 2. Jan 2025 ##
 
 # Prepare precipitation data for RDiT
 ppt_rdit25 <- monthly_ppt |>
-  filter(year >= "2024") |> 
+  filter(year %in% c(2024, 2025)) |> 
   mutate(date = as.Date(paste(year, month, "01", sep = "-")),
          cutoff    = as.Date("2025-01-01"),
          Time_ppt = interval(cutoff, date) %/% months(1),
