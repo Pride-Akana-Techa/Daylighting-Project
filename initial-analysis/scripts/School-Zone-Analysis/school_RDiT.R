@@ -834,6 +834,166 @@ p_2025 <- make_cutoff_plot(
 p_2024 + p_2025
 
 
+# RD Effect by School Zone ----------------------------------------------------
+
+# color palette (same as city analysis)
+sunflower <- c(
+  "#F2C94C",
+  "#1E4E8C",
+  "#D4A04A",
+  "#8A9B5B",
+  "#F7F4E7"
+)
 
 
+# Extract coefficients from rdrobust
+extract_rd <- function(model, zone_type, cutoff){
+  
+  tibble(
+    Zone = zone_type,
+    Effect = model$coef[3,1],
+    Cutoff = cutoff,
+    SE = model$se[3,1],
+    P_value = model$pv[3,1],
+    CI_lower = model$ci[3,1],
+    CI_upper = model$ci[3,2]
+  )
+}
 
+
+# Build dataframe for school zone analysis
+school_zone_analysis <- bind_rows(
+  
+  extract_rd(school_zone_model, 
+             "School Zone", 
+             "2024"),
+  
+  extract_rd(school_zone_model2, 
+             "School Zone", 
+             "2025"),
+  
+  extract_rd(school_zone_model3, 
+             "Non-School Zone", 
+             "2024"),
+  
+  extract_rd(school_zone_model4, 
+             "Non-School Zone", 
+             "2025")
+  
+) |>
+  
+  mutate(
+    Zone = factor(
+      Zone,
+      levels = c("School Zone", "Non-School Zone")
+    ),
+    
+    Cutoff = factor(
+      Cutoff,
+      levels = c("2024", "2025")
+    ),
+    
+    Sig = case_when(
+      P_value < 0.01 ~ "***",
+      P_value < 0.05 ~ "**",
+      P_value < 0.10 ~ "*",
+      TRUE ~ ""
+    ),
+    
+    Label = round(Effect, 2)
+  )
+
+
+# Plot
+ggplot(
+  school_zone_analysis,
+  aes(Zone, Effect, fill = Cutoff)
+) +
+  
+  geom_col(
+    position = position_dodge(width = 0.6),
+    width = 0.55
+  ) +
+  
+  geom_text(
+    aes(
+      label = Label,
+      vjust = ifelse(Effect < 0, 1.15, -0.35),
+      color = ifelse(Sig != "" & !is.na(Sig), "#800000", "black"),
+      group = Cutoff
+    ),
+    position = position_dodge(width = 0.65),
+    fontface = "bold",
+    size = 4.5
+  ) +
+  
+  geom_text(
+    aes(
+      label = Sig,
+      y = ifelse(Effect < 0, Effect - 0.2, Effect + 0.2),
+      vjust = ifelse(Effect < 0, -3.0, 1.5),
+      hjust = -1.2,
+      color = "#800000",
+      group = Cutoff
+    ),
+    position = position_dodge(width = 0.65),
+    size = 4,
+    fontface = "bold"
+  ) +
+  
+  scale_color_identity() +
+  
+  scale_x_discrete(
+    expand = expansion(mult = c(0.1,0.1))
+  ) +
+  
+  geom_hline(
+    yintercept = 0,
+    linewidth = .5
+  ) +
+  
+  scale_fill_manual(
+    values = sunflower
+  ) +
+  
+  labs(
+    title = "RD Effect by School Zone Classification",
+    subtitle = "Comparison of pedestrian crashes within and outside school zones",
+    x = NULL,
+    y = "RD Effect (Standardized by z-scores)",
+    fill = NULL,
+    caption = "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level"
+  ) +
+  
+  theme_minimal(
+    base_size = 14
+  ) +
+  
+  theme(
+    legend.position = "bottom",
+    
+    plot.caption = element_text(
+      hjust = 0.5,
+      face = "italic",
+      size = 10,
+      color = "#800000"
+    ),
+    
+    axis.text.x = element_text(
+      face = "bold",
+      size = 13
+    ),
+    
+    plot.title = element_text(
+      face = "bold",
+      size = 17
+    ),
+    
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+# Save
+ggsave(filename = "initial-analysis/figs/school_zone.png",
+       width = 10,
+       height = 10)

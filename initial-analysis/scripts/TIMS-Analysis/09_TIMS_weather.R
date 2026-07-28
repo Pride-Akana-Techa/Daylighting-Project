@@ -24,7 +24,7 @@ weather_distribution <- tims_data |>
 
 # Monthly Proportion
 weather_monthly <- tims_data |> 
-  filter(ACCIDENT_YEAR >= "2022",
+  filter(ACCIDENT_YEAR >= 2022,
          PED_ACTION == "B",
          INTERSECTION == "Y") |> 
   filter_out(is.na(WEATHER_1)) |>

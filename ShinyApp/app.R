@@ -18,6 +18,7 @@ library(leafgl)
 library(leaflet.extras)
 library(rdrobust)
 library(patchwork)
+library(ggh4x)
 
 # Palette
 brand <- list(
@@ -482,6 +483,26 @@ app_theme <- bs_theme(
   border-right: 1px dashed var(--brand-border);
 }
 
+.accordion-item {
+  border: 1px solid var(--brand-border) !important;
+  background: #FFFFFF;
+}
+.accordion-button {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--brand-navy) !important;
+  background-color: var(--brand-surface) !important;
+}
+.accordion-button:not(.collapsed) {
+  background-color: var(--brand-highlight) !important;
+  box-shadow: none;
+}
+.accordion-button:focus {
+  box-shadow: none;
+  border-color: var(--brand-border);
+}
+
     @media (max-width: 950px) {
       .app-shell { flex-direction: column; }
       .app-sidebar { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--brand-border); padding: 24px; }
@@ -559,6 +580,27 @@ includeHTML("www/literature_review.html")
 # ==========================================================================
 
 tims_crashes <- readRDS("shiny-data/TIMS_Filtered.rds")
+
+## Jan 2024 cut-off(4-year span)
+rdit_data2 <- tims_crashes |> 
+  filter(ACCIDENT_YEAR >= 2022) |> 
+  filter(PED_ACTION == "B" & INTERSECTION == "Y") |>
+  mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
+         Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
+         Post = ifelse(Time >= 0, 1, 0),
+         Season_factor = factor(
+           case_when(
+             month(MONTH) %in% c(12, 1, 2) ~ "Winter",
+             month(MONTH) %in% c(3, 4, 5) ~ "Spring",
+             month(MONTH) %in% c(6, 7, 8) ~ "Summer",
+             month(MONTH) %in% c(9, 10, 11) ~ "Fall"
+           ),
+           levels = c("Winter", "Spring", "Summer", "Fall")
+         )) |> 
+  group_by(Time, Post, Season_factor) |> 
+  summarise(Total_crashes = n(),
+            .groups = "drop")
+
 
 # --- Jan 2024 cutoff (2-year span) ---------------------------------------
 two_year_rdit <- tims_crashes |>
@@ -655,8 +697,6 @@ make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
     geom_line(data = filter(ci_data, Time < 0), aes(Date, fit), color = line_color, linewidth = 1) +
     geom_line(data = filter(ci_data, Time > 0), aes(Date, fit), color = line_color, linewidth = 1) +
     geom_vline(xintercept = cutoff_date, linetype = "dashed", color = "black") +
-    annotate("text", x = cutoff_date, y = Inf, label = event_label,
-             vjust = 1.5, fontface = "bold", size = 4) +
     scale_y_continuous(breaks = y_breaks) +
     scale_x_date(date_labels = "%b %Y", limits = x_limits, breaks = x_breaks, expand = c(0.02, 0)) +
     theme_minimal(base_size = 13) +
@@ -669,7 +709,7 @@ make_cutoff_plot <- function(ci_data, cutoff_date, model_label, line_color,
 
 p_2024 <- make_cutoff_plot(
   ci_2024, cutoff_date = as.Date("2024-01-01"),
-  model_label = "Jan 2024 Cutoff", line_color = "#003B5C",
+  model_label = "Jan 2024 Cutoff (Warning Begins)", line_color = "#003B5C",
   event_label = "Warning Begins",
   x_limits = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
   x_breaks = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months")
@@ -677,13 +717,95 @@ p_2024 <- make_cutoff_plot(
 
 p_2025 <- make_cutoff_plot(
   ci_2025, cutoff_date = as.Date("2025-01-01"),
-  model_label = "Jan 2025 Cutoff", line_color = "#C16200",
+  model_label = "Jan 2025 Cutoff (Enforcement Begins)", line_color = "#C16200",
   event_label = "Enforcement Begins",
   x_limits = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
   x_breaks = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
 )
 
 statewide_rdit_plot <- p_2024 + p_2025
+
+# ==========================================================================
+# Bandwidth Sensitivity Check
+# ==========================================================================
+
+bw_sensitivity <- function(data, y_var, x_var, covs_var, cutoff, bw_grid, kernel = "triangular") {
+  y <- data[[y_var]]
+  x <- data[[x_var]]
+  
+  covs <- model.matrix(~ data[[covs_var]])[, -1, drop = FALSE]
+  
+  results <- lapply(bw_grid, function(h) {
+    fit <- tryCatch(
+      rdrobust(y = y, x = x, c = cutoff, h = h, kernel = kernel, covs = covs),
+      error = function(e) NULL
+    )
+    
+    if (is.null(fit)) {
+      return(data.frame(bw = h, coef = NA, se = NA, ci_lower = NA, ci_upper = NA))
+    }
+    
+    data.frame(
+      bw       = h,
+      coef     = fit$coef["Conventional", ],
+      se       = fit$se["Conventional", ],
+      ci_lower = fit$ci["Conventional", "CI Lower"],
+      ci_upper = fit$ci["Conventional", "CI Upper"]
+    )
+  })
+  
+  bind_rows(results)
+}
+
+bw_grid_2024 <- seq(4, 24, by = 2)
+bw_grid_2025 <- seq(4, 12, by = 1)
+
+sens_2024 <- bw_sensitivity(
+  data     = rdit_data2,   
+  y_var    = "Total_crashes",
+  x_var    = "Time",
+  covs_var = "Season_factor",
+  cutoff   = 0,
+  bw_grid  = bw_grid_2024
+)
+sens_2024$cutoff_label <- "January 2024 (Warning)"
+
+sens_2025 <- bw_sensitivity(
+  data     = rdit_data3,      # Jan 2025 cutoff data (already built above)
+  y_var    = "Total_crashes",
+  x_var    = "Time",
+  covs_var = "Season_factor",
+  cutoff   = 0,
+  bw_grid  = bw_grid_2025
+)
+sens_2025$cutoff_label <- "January 2025 (Enforcement)"
+
+sens_all <- bind_rows(sens_2024, sens_2025)
+
+bandwidth_sensitivity_plot <- ggplot(sens_all, aes(x = bw, y = coef)) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), fill = "steelblue", alpha = 0.2) +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  geom_point(color = "steelblue", size = 1.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~ cutoff_label, scales = "free") +
+  facetted_pos_scales(
+    x = list(
+      cutoff_label == "January 2024 (Warning)"     ~ scale_x_continuous(limits = c(4, 24), breaks = seq(4, 24, by = 2)),
+      cutoff_label == "January 2025 (Enforcement)"  ~ scale_x_continuous(limits = c(4, 12), breaks = seq(4, 12, by = 1))
+    ),
+    y = list(
+      cutoff_label == "January 2024 (Warning)"      ~ scale_y_continuous(limits = c(-400, 250), breaks = seq(-300, 250, by = 100)),
+      cutoff_label == "January 2025 (Enforcement)"  ~ scale_y_continuous(limits = c(-400, 250), breaks = seq(-300, 250, by = 100))
+    )
+  ) +
+  labs(
+    x = "Bandwidth (months)",
+    y = "RD Estimate",
+    title = "Bandwidth Sensitivity of RDiT Estimates",
+    subtitle = "Shaded band = 95% confidence interval"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(strip.text = element_text(face = "bold"))
 
 # ==========================================================================
 # Hot & Cold Spot Analysis (Getis-Ord Gi*) — precomputed results
@@ -781,6 +903,193 @@ hotspot_summary_df <- function(active_panel) {
     dplyr::mutate(significance = factor(significance, levels = levels_order)) |>
     dplyr::arrange(significance)
 }
+
+# ==========================================================================
+# City-Level RDiT Models (San Diego, San Francisco, Los Angeles)
+# ==========================================================================
+
+fit_city_rdit <- function(city, cutoff_date, year_filter = NULL, date_filter = NULL, h = 12) {
+  d <- tims_crashes |> filter(CITY == city)
+  
+  if (!is.null(year_filter)) d <- d |> filter(ACCIDENT_YEAR %in% year_filter)
+  if (!is.null(date_filter)) d <- d |> filter(COLLISION_DATE >= date_filter)
+  
+  d <- d |>
+    filter(PED_ACTION == "B" & INTERSECTION == "Y") |>
+    mutate(
+      MONTH = floor_date(ymd(COLLISION_DATE), "month"),
+      Time  = interval(as.Date(cutoff_date), MONTH) %/% months(1),
+      Post  = ifelse(Time >= 0, 1, 0),
+      Season_factor = factor(
+        case_when(
+          month(MONTH) %in% c(12, 1, 2) ~ "Winter",
+          month(MONTH) %in% c(3, 4, 5)  ~ "Spring",
+          month(MONTH) %in% c(6, 7, 8)  ~ "Summer",
+          month(MONTH) %in% c(9, 10, 11) ~ "Fall"
+        ),
+        levels = c("Winter", "Spring", "Summer", "Fall")
+      )
+    ) |>
+    group_by(CITY, Time, Post, Season_factor) |>
+    summarise(Total_crashes = n(), .groups = "drop")
+  
+  model <- rdrobust(
+    y = d$Total_crashes, x = d$Time,
+    covs = model.matrix(~ Season_factor, d)[, -1],
+    c = 0, p = 1, h = h, kernel = "triangular"
+  )
+  
+  # Seasonally-adjusted crash count, used for the CI-band plot
+  season_fit <- lm(Total_crashes ~ Season_factor, data = d)
+  d$Crash_adj <- resid(season_fit) + mean(d$Total_crashes)
+  
+  list(model = model, data = d)
+}
+
+san_diego_fit      <- fit_city_rdit("SAN DIEGO", "2024-01-01", year_filter = c(2023, 2024), h = 10)
+san_diego1_fit     <- fit_city_rdit("SAN DIEGO", "2025-03-01", date_filter = as.Date("2024-05-01"), h = 10)
+san_francisco_fit  <- fit_city_rdit("SAN FRANCISCO", "2024-01-01", year_filter = c(2023, 2024), h = 12)
+san_francisco1_fit <- fit_city_rdit("SAN FRANCISCO", "2025-01-01", year_filter = c(2024, 2025), h = 12)
+la_fit             <- fit_city_rdit("LOS ANGELES", "2024-01-01", year_filter = c(2023, 2024), h = 12)
+la1_fit            <- fit_city_rdit("LOS ANGELES", "2025-01-01", year_filter = c(2024, 2025), h = 12)
+
+san_diego_model      <- san_diego_fit$model
+san_diego1_model     <- san_diego1_fit$model
+san_francisco_model  <- san_francisco_fit$model
+san_francisco1_model <- san_francisco1_fit$model
+la_model             <- la_fit$model
+la1_model            <- la1_fit$model
+
+
+extract_rd <- function(model, city, cutoff) {
+  tibble(
+    City = city, Effect = model$coef[3, 1], Cutoff = cutoff,
+    SE = model$se[3, 1], P_value = model$pv[3, 1],
+    CI_lower = model$ci[3, 1], CI_upper = model$ci[3, 2]
+  )
+}
+
+city_analysis <- bind_rows(
+  extract_rd(san_diego_model,      "San Diego",     "2024"),
+  extract_rd(san_diego1_model,     "San Diego",     "2025"),
+  extract_rd(san_francisco_model,  "San Francisco", "2024"),
+  extract_rd(san_francisco1_model, "San Francisco", "2025"),
+  extract_rd(la_model,             "Los Angeles",   "2024"),
+  extract_rd(la1_model,            "Los Angeles",   "2025")
+) |>
+  mutate(
+    City = factor(City, levels = c("San Diego", "San Francisco", "Los Angeles")),
+    Cutoff = factor(Cutoff, levels = c("2024", "2025")),
+    Sig = case_when(
+      P_value < 0.01 ~ "***",
+      P_value < 0.05 ~ "**",
+      P_value < 0.10 ~ "*",
+      TRUE ~ ""
+    ),
+    Label = round(Effect, 2)
+  )
+
+build_city_rd_plot <- function(fit_pre, fit_post, cutoff_date_pre, cutoff_date_post,
+                               city_label, x_limits_pre, x_breaks_pre,
+                               x_limits_post, x_breaks_post) {
+  
+  ci_pre <- bind_rows(
+    make_ci_band(fit_pre$data, "Crash_adj", function(t) t < 0, xseq_left),
+    make_ci_band(fit_pre$data, "Crash_adj", function(t) t >= 0, xseq_right)
+  ) |> mutate(Date = as.Date(cutoff_date_pre) + Time * 30.4368)
+  
+  ci_post <- bind_rows(
+    make_ci_band(fit_post$data, "Crash_adj", function(t) t < 0, xseq_left),
+    make_ci_band(fit_post$data, "Crash_adj", function(t) t >= 0, xseq_right)
+  ) |> mutate(Date = as.Date(cutoff_date_post) + Time * 30.4368)
+  
+  p1 <- make_cutoff_plot(
+    ci_pre, cutoff_date = as.Date(cutoff_date_pre),
+    model_label = paste(city_label, "— Warning Phase Cutoff"),
+    line_color = "#003B5C", event_label = "Warning Begins",
+    x_limits = x_limits_pre, x_breaks = x_breaks_pre,
+    y_breaks = seq(5, 35, by = 5)
+  )
+  
+  p2 <- make_cutoff_plot(
+    ci_post, cutoff_date = as.Date(cutoff_date_post),
+    model_label = paste(city_label, "— Enforcement Phase Cutoff"),
+    line_color = "#C16200", event_label = "Enforcement Begins",
+    x_limits = x_limits_post, x_breaks = x_breaks_post,
+    y_breaks = seq(5, 35, by = 5)
+  )
+  
+  p1 + p2
+}
+
+city_rdit_plots <- list(
+  "San Diego" = build_city_rd_plot(
+    san_diego_fit, san_diego1_fit,
+    cutoff_date_pre = "2024-01-01", cutoff_date_post = "2025-03-01",
+    city_label = "San Diego",
+    x_limits_pre  = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+    x_breaks_pre  = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months"),
+    x_limits_post = c(as.Date("2024-05-01"), as.Date("2025-12-01")),
+    x_breaks_post = seq(as.Date("2024-05-01"), as.Date("2025-12-01"), by = "2 months")
+  ),
+  "San Francisco" = build_city_rd_plot(
+    san_francisco_fit, san_francisco1_fit,
+    cutoff_date_pre = "2024-01-01", cutoff_date_post = "2025-01-01",
+    city_label = "San Francisco",
+    x_limits_pre  = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+    x_breaks_pre  = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months"),
+    x_limits_post = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+    x_breaks_post = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+  ),
+  "Los Angeles" = build_city_rd_plot(
+    la_fit, la1_fit,
+    cutoff_date_pre = "2024-01-01", cutoff_date_post = "2025-01-01",
+    city_label = "Los Angeles",
+    x_limits_pre  = c(as.Date("2023-01-01"), as.Date("2024-12-01")),
+    x_breaks_pre  = seq(as.Date("2023-01-01"), as.Date("2024-12-01"), by = "2 months"),
+    x_limits_post = c(as.Date("2024-01-01"), as.Date("2025-12-01")),
+    x_breaks_post = seq(as.Date("2024-01-01"), as.Date("2025-12-01"), by = "2 months")
+  )
+)
+
+# Bar plot
+sunflower <- c("#F2C94C", "#1E4E8C", "#D4A04A", "#8A9B5B", "#F7F4E7")
+
+city_rd_plot <- ggplot(city_analysis, aes(City, Effect, fill = Cutoff)) +
+  geom_col(position = position_dodge(width = 0.6), width = 0.55) +
+  geom_text(
+    aes(label = Label,
+        vjust = ifelse(Effect < 0, 1.15, -0.35),
+        color = ifelse(Sig != "" & !is.na(Sig), "#C16200", "black"),
+        group = Cutoff),
+    position = position_dodge(width = 0.65), fontface = "bold", size = 4.5
+  ) +
+  geom_text(
+    aes(label = Sig,
+        y = ifelse(Effect < 0, Effect - 2, Effect + 2),
+        vjust = ifelse(Effect < 0, -0.9, 1.5), hjust = -1.5,
+        color = "#C16200"),
+    position = position_dodge(width = 0.65), size = 4, fontface = "bold"
+  ) +
+  scale_color_identity() +
+  scale_x_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  geom_hline(yintercept = 0, linewidth = .5) +
+  scale_fill_manual(values = sunflower) +
+  labs(
+    title = "RD Effect by Major Cities",
+    subtitle = "Comparison of San Diego, San Francisco, & Los Angeles",
+    x = NULL, y = "RD Effect", fill = NULL,
+    caption = "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    plot.caption = element_text(hjust = 0.5, face = "italic", size = 10, color = "#C16200"),
+    axis.text.x = element_text(face = "bold", size = 13),
+    plot.title = element_text(face = "bold", size = 17),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 
 # ==========================================================================
 # Placebo Tests
@@ -1397,7 +1706,7 @@ results_page <- div(
     # TAB 1: Main Results
     # ======================================================
     nav_panel(
-      title = "Main Findings",
+      title = "Statewide Findings",
       value = "main",
       
       #--------------------------------------------------
@@ -1405,7 +1714,7 @@ results_page <- div(
       #--------------------------------------------------
       
       div(
-        div(class = "document-card-title", "Statewide Pedestrian Outcome"),
+        div(class = "document-card-title", "Pedestrian Outcome"),
         div(
           class = "document-card",
           p(
@@ -1430,7 +1739,7 @@ results_page <- div(
       ),
       
       div(
-        div(class = "document-card-title", "Statewide Bicyclist Outcome"),
+        div(class = "document-card-title", "Bicyclist Outcome"),
         div(
           class = "document-card",
           p(
@@ -1461,7 +1770,45 @@ results_page <- div(
     ),
     
     # ======================================================
-    # TAB 2: Robustness Checks
+    # TAB 2: City Analysis
+    # ======================================================
+    nav_panel(
+      title = "City-level Analysis",
+      value = "city",
+      
+      div(class = "document-card-title", "A case study of San Diego, San Francisco, and Los Angeles"),
+      div(
+        class = "document-card",
+        p(
+          "While statewide analyses provide an overall assessment of AB 413's impact, city-level analyses offer insight into how the law performs under different local conditions. Differences in implementation, enforcement, traffic patterns, and pedestrian activity mean that the policy's effects may not be uniform across California. To explore this variation, we examined three major cities with high levels of pedestrian activity: San Diego, San Francisco, and Los Angeles. Results showed distinct patterns across the policy's implementation phases. In San Francisco, pedestrian crashes at intersections increased during the January 2024 warning period but declined significantly after statewide enforcement began in January 2025. San Diego experienced a significant reduction in crashes following its March 2025 enforcement date, while Los Angeles showed no statistically significant changes during either phase. Overall, these findings indicate that the effectiveness of AB 413 differs across cities, suggesting that local enforcement strategies, implementation approaches, and roadway characteristics may influence the policy's impact.",
+          style = "line-height:1.8;"
+        ),
+        plotOutput("city_rd_plot", height = "480px")
+      ),
+      
+      div(class = "document-card-title", "Individual City RDiT Models"),
+      accordion(
+        id = "city_rdit_accordion",
+        open = FALSE,
+        accordion_panel(
+          title = "San Diego",
+          plotOutput("city_rdit_san_diego", height = "380px")
+        ),
+        accordion_panel(
+          title = "San Francisco",
+          plotOutput("city_rdit_san_francisco", height = "380px")
+        ),
+        accordion_panel(
+          title = "Los Angeles",
+          plotOutput("city_rdit_la", height = "380px")
+        )
+      ),
+      
+      hr(class = "double-hr")
+    ),
+    
+    # ======================================================
+    # TAB 3: Robustness Checks
     # ======================================================
     nav_panel(
       title = "Robustness Checks",
@@ -1477,6 +1824,7 @@ results_page <- div(
           "We use a 12-month bandwidth in the main specification. The binding constraint is data availability: at the January 2025 cutoff, only 12 months of post-period data are currently observed, so 12 months is the widest symmetric window available for that cutoff, and we apply it to both cutoffs for comparability. This choice falls within the range where estimates are both precise and stable. The table below reports the main results at 10- and 11-month bandwidths as a robustness check. The point estimates are similar in magnitude, though standard errors are larger at the narrower bandwidths, and the estimates are no longer significant at the 5% level. Because the point estimates move little, the loss of significance appears to reflect the reduced number of post-period observations rather than instability in the estimated effect.",
           style = "line-height:1.8;"
         ),
+        plotOutput("bandwidth_sensitivity_plot", height = "380px"),
         uiOutput("bandwidth_results_table")
       ),
       
@@ -2024,6 +2372,23 @@ server <- function(input, output, session) {
     statewide_rdit_plot
   })
   
+  # city-level plot
+  output$city_rd_plot <- renderPlot({
+    city_rd_plot
+  })
+  
+  output$city_rdit_san_diego <- renderPlot({
+    city_rdit_plots[["San Diego"]]
+  })
+  
+  output$city_rdit_san_francisco <- renderPlot({
+    city_rdit_plots[["San Francisco"]]
+  })
+  
+  output$city_rdit_la <- renderPlot({
+    city_rdit_plots[["Los Angeles"]]
+  })
+  
   output$statewide_results_table <- renderUI({
     results_df <- tibble::tibble(
       Cutoff       = c("January 2024", "January 2025"),
@@ -2224,6 +2589,12 @@ server <- function(input, output, session) {
   })
   
   # Bandwidth sensitivity
+  # Plot
+  output$bandwidth_sensitivity_plot <- renderPlot({
+    bandwidth_sensitivity_plot
+  })
+  
+  # Table
   output$bandwidth_results_table <- renderUI({
     bw_df <- tibble::tribble(
       ~Cutoff,       ~Bandwidth,    ~Estimate, ~pval, ~se,    ~ci_lo,    ~ci_hi,
