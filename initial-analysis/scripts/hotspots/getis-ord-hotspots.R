@@ -92,6 +92,21 @@ bg_3county <- get_acs(
 
 bg_3county <- bg_3county[!st_is_empty(bg_3county), ]
 
+tract_3county <- get_acs(
+  geography = "tract",
+  variables = "B01001_001",
+  state     = "CA",
+  county    = c("San Diego", "San Francisco", "Los Angeles"),
+  year      = 2023,
+  cb        = TRUE,
+  geometry  = TRUE
+) |>
+  st_transform(target_crs) |>
+  st_make_valid()
+
+tract_3county <- tract_3county[!st_is_empty(tract_3county), ]
+
+
 #### Morans I KNN sweep ####
 sweep_knn_moran <- function(centroids, values, k_range) {
   out <- vector("list", length(k_range))
@@ -155,9 +170,10 @@ calc_gi_panel <- function(polygons, crash_city, scenario_row, city_name, k_range
   nb <- knearneigh(centroids, k = best_k) |> knn2nb()
   nb_self <- spdep::include.self(nb)
   lw <- nb2listw(nb_self, style = "W", zero.policy = TRUE)
+  poly_panel$neighbor_geoids <- I(lapply(nb_self, function(idx) poly_panel$GEOID[idx]))
   
   poly_panel$local_gi_mean <- spdep::lag.listw(lw, poly_panel$change_rate_mo, zero.policy = TRUE)
-  
+ 
   citywide_mean_change <- mean(poly_panel$change_rate_mo, na.rm = TRUE)
   poly_panel$change_rate_mo_adj <- poly_panel$change_rate_mo - citywide_mean_change
   poly_panel$gi_z_score <- as.numeric(localG(poly_panel$change_rate_mo_adj, lw, zero.policy = TRUE))
@@ -187,7 +203,7 @@ calc_gi_panel <- function(polygons, crash_city, scenario_row, city_name, k_range
   list(panel = poly_panel, k = best_k, months = months_in_window)
 }
 
-process_city_scenario <- function(city_name, scenario_row, city_boundary, bg_all, crash_all, k_range) {
+process_city_scenario <- function(city_name, scenario_row, city_boundary, bg_all, tract_all, crash_all, k_range) {
   message("Processing: ", city_name, " | ", scenario_row$scenario)
   
   bg_sub  <- bg_all[st_intersects(bg_all, city_boundary, sparse = FALSE)[, 1], ]
@@ -195,8 +211,15 @@ process_city_scenario <- function(city_name, scenario_row, city_boundary, bg_all
   bg_city <- bg_city[st_geometry_type(bg_city) %in% c("POLYGON", "MULTIPOLYGON"), ]
   bg_city <- bg_city[as.numeric(st_area(bg_city)) > 1000, ]
   
-  # placeholder 1000 m cell size
-  hex_grid <- st_make_grid(city_boundary, cellsize = 1000, square = FALSE) |> 
+  tract_sub  <- tract_all[st_intersects(tract_all, city_boundary, sparse = FALSE)[, 1], ]
+  tract_city <- st_intersection(tract_sub, city_boundary) |> st_make_valid()
+  tract_city <- tract_city[st_geometry_type(tract_city) %in% c("POLYGON", "MULTIPOLYGON"), ]
+  tract_city <- tract_city[as.numeric(st_area(tract_city)) > 1000, ]
+  
+  hex_cellsize_ft <- 1000
+  hex_cellsize_m  <- hex_cellsize_ft * 0.3048  # 152.4
+  
+  hex_grid <- st_make_grid(city_boundary, cellsize = hex_cellsize_m, square = FALSE) |>
     st_as_sf() |> 
     st_intersection(city_boundary) |>
     st_make_valid()
@@ -208,14 +231,17 @@ process_city_scenario <- function(city_name, scenario_row, city_boundary, bg_all
   crash_city <- crash_all[st_within(crash_all, city_boundary, sparse = FALSE)[, 1], ]
   
   bg_res  <- calc_gi_panel(bg_city, crash_city, scenario_row, city_name, k_range)
+  tract_res <- calc_gi_panel(tract_city, crash_city, scenario_row, city_name, k_range)
   hex_res <- calc_gi_panel(hex_city, crash_city, scenario_row, city_name, k_range)
   
   list(
     bg_panel      = bg_res$panel,
     hex_panel     = hex_res$panel,
+    tract_panel   = tract_res$panel,
     city_boundary = city_boundary,
     bg_k          = bg_res$k,
     hex_k         = hex_res$k,
+    tract_k       = tract_res$k,
     months        = bg_res$months
   )
 }
@@ -228,6 +254,7 @@ results <- purrr::map(seq_len(nrow(city_info)), function(i) {
     scenario_row  = row,
     city_boundary = city_boundaries[[row$CITY]],
     bg_all        = bg_3county,
+    tract_all     = tract_3county,
     crash_all     = crash_data,
     k_range       = k_range
   )
