@@ -41,7 +41,7 @@ severity_monthly <- tims_data |>
 ## Jan 2024 Cutoff ##
 # Prepare data
 fatal_data <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(COLLISION_SEVERITY == "Fatal Injury") |> 
   mutate(Time = interval(as.Date("2024-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -78,7 +78,7 @@ fatal_data$Crash_adj <- resid(season_fatal_model) +
 ## Jan 2025 ##
 # Prepare data
 fatal_data2 <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(COLLISION_SEVERITY == "Fatal Injury") |> 
   mutate(Time = interval(as.Date("2025-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -213,7 +213,7 @@ ggsave(filename = "initial-analysis/figs/fatal_models.png",
 ## Jan 2024 Cutoff ##
 # Prepare data
 possible_data <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(COLLISION_SEVERITY == "Possible Injury") |> 
   mutate(Time = interval(as.Date("2024-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -250,7 +250,7 @@ possible_data$Crash_adj <- resid(season_possible_model) +
 ## Jan 2025 ##
 # Prepare data
 possible_data2 <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(COLLISION_SEVERITY == "Possible Injury") |> 
   mutate(Time = interval(as.Date("2025-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -384,7 +384,7 @@ ggsave(filename = "initial-analysis/figs/possible_inj_models.png",
 ## Jan 2024 Cutoff ##
 # Prepare data
 minor_data <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(COLLISION_SEVERITY == "Suspected Minor Injury") |> 
   mutate(Time = interval(as.Date("2024-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -421,7 +421,7 @@ minor_data$Crash_adj <- resid(season_minor_model) +
 ## Jan 2025 ##
 # Prepare data
 minor_data2 <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(COLLISION_SEVERITY == "Suspected Minor Injury") |> 
   mutate(Time = interval(as.Date("2025-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -556,7 +556,7 @@ ggsave(filename = "initial-analysis/figs/minor_inj_models.png",
 ## Jan 2024 Cutoff ##
 # Prepare data
 severe_data <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(COLLISION_SEVERITY == "Suspected Serious Injury") |> 
   mutate(Time = interval(as.Date("2024-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -593,7 +593,7 @@ severe_data$Crash_adj <- resid(season_severe_model) +
 ## Jan 2025 ##
 # Prepare data
 severe_data2 <- severity_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(COLLISION_SEVERITY == "Suspected Serious Injury") |> 
   mutate(Time = interval(as.Date("2025-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),

@@ -45,7 +45,7 @@ tims_crashes2 <- readRDS("initial-analysis/data-clean/tims_crashes.rds")
 
 # Prepare data
 bike_data <- tims_crashes2 |>
-  filter(ACCIDENT_YEAR %in% c("2023", "2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024, 2025)) |> 
   filter(INTERSECTION == "Y" & BICYCLE_ACCIDENT == "Y") 
 
 
@@ -76,7 +76,7 @@ ggplot(bike_monthly, aes(x = year_month, y = crash_count)) +
 
 # Prepare model data
 bike_rdit <- bike_data |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |>
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -134,7 +134,7 @@ bike_rd_out$rdplot +
 # Prepare data for the model
 
 bike_rdit2 <- bike_data |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |>
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -279,13 +279,13 @@ ggsave(filename = "initial-analysis/figs/bike_int_rdit.png",
 # Bicycle Non-Intersection  -----------------------------------------------
 
 bike_data2 <- tims_crashes2 |>
-  filter(ACCIDENT_YEAR %in% c("2023", "2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024, 2025)) |> 
   filter(INTERSECTION == "N" & BICYCLE_ACCIDENT == "Y") 
 
 
 ## Jan 2024 ##
 bike_rdit3 <- bike_data2 |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |>
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -340,7 +340,7 @@ bike_rd_out3$rdplot +
 
 ## Jan 2025 Cutoff ##
 bike_rdit4 <- bike_data2 |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |>
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -481,12 +481,12 @@ ggsave(filename = "initial-analysis/figs/bike_int.png",
        width = 20)
 
 
-# Non Pedestrians Intersections ---------------------------------------------
+# Non-pedestrian Intersections ---------------------------------------------
 
 ## Jan 2024 Cutoff
 # Prepare model data
 no_ped_data <- tims_crashes |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(PED_ACTION == "A" &
          INTERSECTION == "Y") |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
@@ -545,7 +545,7 @@ no_ped_rd_out$rdplot +
 ## 2. Jan 2025 Cutoff
 # Prepare data for the model
 no_ped_data2 <- tims_crashes |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(PED_ACTION == "A" &
            INTERSECTION == "Y") |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
@@ -694,7 +694,7 @@ ggsave(filename = "initial-analysis/figs/no_ped.png",
 ## 1. Jan 2024 Cutoff
 # Prepare model data
 other_ped_data <- tims_crashes |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(PED_ACTION %in% c("D", "E", "F")) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2024-01-01"), MONTH) %/% months(1),
@@ -752,7 +752,7 @@ other_ped_rd_out$rdplot +
 ## 2. Jan 2025 Cutoff
 # Prepare data for the model
 other_ped_data2 <- tims_crashes |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(PED_ACTION %in% c("D", "E", "F")) |>
   mutate(MONTH = floor_date(ymd(COLLISION_DATE), "month"),
          Time = interval(as.Date("2025-01-01"), MONTH) %/% months(1),
