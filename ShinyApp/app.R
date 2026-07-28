@@ -1297,7 +1297,7 @@ overview_page <- div(
       div(class = "document-card",
           p(
             p(
-              "This project evaluates the impact of AB 413 on pedestrian and bicyclist safety outcomes across California using statewide crash data and advanced statistical methods. The analysis examines changes in crash patterns before and after implementation of the law, while accounting for seasonal trends, roadway characteristics, weather conditions, lighting conditions, and differences across communities. In addition to measuring the overall effect of the policy, this project explores whether impacts vary by factors such as crash severity and local implementation strategies."
+              "This project evaluates the impact of AB 413 on pedestrian and bicyclist safety outcomes across California using statewide crash data and advanced statistical methods. The analysis examines changes in crash patterns before and after implementation of the law, while accounting for seasonal trends, weather conditions, lighting conditions, and differences across communities. In addition to measuring the overall effect of the policy, this project explores whether impacts vary by factors such as crash severity and local implementation strategies."
             ),
             p(
               "The findings from this research provide evidence on the effectiveness of daylighting policies as a transportation safety intervention and help identify where additional improvements may be needed. By combining data visualization, spatial analysis, and causal inference methods, this dashboard presents an accessible overview of the results and supports data-driven decision-making for transportation agencies, policymakers, and communities working to improve pedestrian and bicyclist safety."
@@ -1498,8 +1498,8 @@ methodology_page <- div(
       div(class = "document-card-title", "Regression Discontinuity in Time"),
       div(class = "document-card document-card--model",
           p(
-            "To estimate the causal effect of the implementation of AB 413 on crash frequency, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
-            tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
+            "To estimate the causal effect of the implementation of AB 413 on crash frequency at a statewide level, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
+            tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. We estimate a local linear specification as follows:",
             style = "color: var(--brand-ink); line-height: 1.7;"
           ),
           div(
@@ -1733,7 +1733,7 @@ results_page <- div(
         div(
           class = "document-card",
           p(
-            "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. Because these two estimates capture different comparisons (pre-policy vs. warning period, and warning period vs. enforcement), they shouldn't be read as repeated measures of the same effect; rather, the presence of a significant effect at both points suggests a safety benefit emerged as soon as the law took effect.",
+            "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. These two estimates represent different comparisons: the first looks at changes after the law took effect, while the second examines changes after enforcement began. They should not be added together or viewed as the same effect. Instead, the consistent reductions across both periods suggest that AB 413 began improving pedestrian safety soon after it was implemented.",
             style = "line-height:1.8;"
           )
         )
