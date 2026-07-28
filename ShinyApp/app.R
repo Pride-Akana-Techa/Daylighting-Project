@@ -185,7 +185,7 @@ app_theme <- bs_theme(
       border-bottom: 1px solid var(--brand-border);
     }
     .brand-title { font-weight: 700; font-size: 1.2rem; color: #F1F4F9; letter-spacing: -0.03em; line-height: 1.2; }
-    .brand-subtitle { font-size: 0.78rem; color: var(--brand-muted); margin-top: 8px; line-height: 1.4; font-family: 'Inter', sans-serif; font-weight: 400; }
+    .brand-subtitle { font-size: 0.78rem; color: var(--brand-surface); margin-top: 8px; line-height: 1.4; font-family: 'Inter', sans-serif; font-weight: 400; }
 
     .sidebar-nav { display: flex; flex-direction: column; gap: 6px; margin-top: 20px; }
 
@@ -194,7 +194,7 @@ app_theme <- bs_theme(
       padding: 8px 12px;
       margin-left: -12px;
       border-radius: 4px;
-      color: var(--brand-muted) !important;
+      color: var(--brand-surface) !important;
       text-decoration: none !important;
       font-size: 0.88rem;
       font-family: monospace;
@@ -286,11 +286,26 @@ app_theme <- bs_theme(
 }
     .register-row {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 14px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--brand-border);
       font-size: 0.88rem;
+    }
+    .register-row > span:first-child {
+      font-weight: 600;
+      color: var(--brand-ink);
+    }
+    .register-row .shiny-input-container,
+    .register-row .form-group {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-bottom: 0 !important;
+    }
+    .register-row select,
+    .register-row .irs {
+      width: 100% !important;
     }
     .register-row:last-child { border-bottom: none; }
     .register-row .shiny-input-container { margin-bottom: 0 !important; padding-top: 0 !important; }
@@ -311,6 +326,22 @@ app_theme <- bs_theme(
       border-bottom: 1px solid var(--brand-border);
       font-family: monospace;
       font-size: 0.78rem;
+    }
+    .cluster-warning-banner,
+    .range-warning-banner {
+      min-height: 38px;
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+    }
+    .inline-warning-content {
+      width: 100%;
+      padding: 8px 16px;
+      background: var(--brand-highlight);
+      border-left: 3px solid var(--brand-navy);
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: var(--brand-ink);
     }
     .text-link {
       background-color: var(--brand-link);
@@ -563,8 +594,8 @@ severity_labels_rev <- setNames(names(severity_labels), severity_labels)
 
 # Map-performance caps: keep the browser responsive and avoid crashes when a
 # filter selection still matches a very large number of records
-MAX_CLUSTER_POINTS <- 8000   # individual/clustered markers only shown below this count
-TOP_N_COUNTIES     <- 15     # counties shown individually in the graph's "County" color-by legend; rest grouped as "Other"
+MAX_CLUSTER_POINTS <- 10000   # individual/clustered markers only shown below this count
+TOP_N_COUNTIES     <- 10     # counties shown individually in the graph's "County" color-by legend; rest grouped as "Other"
 
 # Convert word to HTML
 docx_path <- normalizePath("shiny-data/literature_review.docx", mustWork = TRUE)
@@ -808,15 +839,8 @@ bandwidth_sensitivity_plot <- ggplot(sens_all, aes(x = bw, y = coef)) +
   theme(strip.text = element_text(face = "bold"))
 
 # ==========================================================================
-# Hot & Cold Spot Analysis (Getis-Ord Gi*) — precomputed results
+# Hot & Cold Spot Analysis (Getis-Ord Gi)
 # ==========================================================================
-# This expects the `results` object produced by the offline Gi* analysis
-# script (per-city, per-scenario block-group panels with localG z-scores),
-# saved into shiny-data/ alongside the app's other datasets, e.g. add this
-# line to the end of the offline script:
-#   saveRDS(results, "shiny-data/gi_results_by_city_scenarios.rds")
-# Wrapped in tryCatch so the app still loads (with a friendly in-app message
-# on the Hot & Cold Spot Analysis tab) if that file isn't present yet.
 hotspot_results <- tryCatch(
   readRDS("shiny-data/gi_results_by_city_scenarios.rds"),
   error = function(e) NULL
@@ -830,18 +854,24 @@ hot_cold_colors <- c(
   "Cold Spot (95% Conf.)" = "#67a9cf",
   "Cold Spot (99% Conf.)" = "#2166ac"
 )
-
-# Same map builder used to generate the offline poster figures, reused here
-# so the in-app map matches those exactly.
-# Updated map builder supporting dynamic geometry selection ('bg' or 'hex')
 make_gi_map <- function(res_data, geom_type = "bg", base_size = 13) {
   if (is.null(res_data)) return(NULL)
   
-  # Select dynamic panel and metadata based on geom_type toggle
-  panel_data <- if (geom_type == "hex") res_data$hex_panel else res_data$bg_panel
-  optimal_k  <- if (geom_type == "hex") res_data$hex_k else res_data$bg_k
-  unit_name  <- if (geom_type == "hex") "Hexagon Grid" else "Block Groups"
-  
+  panel_data <- switch(geom_type,
+                       "hex"   = res_data$hex_panel,
+                       "tract" = res_data$tract_panel,
+                       res_data$bg_panel
+  )
+  optimal_k  <- switch(geom_type,
+                       "hex"   = res_data$hex_k,
+                       "tract" = res_data$tract_k,
+                       res_data$bg_k
+  )
+  unit_name  <- switch(geom_type,
+                       "hex"   = "Hexagon Grid",
+                       "tract" = "Census Tracts",
+                       "Block Groups"
+  )
   if (is.null(panel_data)) return(NULL)
   
   city_boundary <- res_data$city_boundary
@@ -879,27 +909,38 @@ make_gi_map <- function(res_data, geom_type = "bg", base_size = 13) {
     guides(fill = guide_legend(override.aes = list(fill = hot_cold_colors)))
 }
 
-# Updated summary table builder accepting active panel dataset
-# Updated summary table builder accepting active panel dataset safely
 hotspot_summary_df <- function(active_panel) {
   if (is.null(active_panel) || nrow(active_panel) == 0) return(NULL)
   
   df <- active_panel |> sf::st_drop_geometry()
   levels_order <- levels(df$significance)
   total_units <- nrow(df)
+  has_nbr <- "neighbor_geoids" %in% names(df)
   
   df |>
     dplyr::filter(!is.na(significance)) |>
     dplyr::group_by(significance) |>
-    dplyr::summarise(
-      Count          = dplyr::n(),
-      Share          = Count / total_units,
-      Pre_Total      = sum(pre, na.rm = TRUE),
-      Post_Total     = sum(post, na.rm = TRUE),
-      Avg_Change     = mean(change_rate_mo, na.rm = TRUE),
-      Avg_Local_Mean = mean(local_gi_mean, na.rm = TRUE),
-      .groups = "drop"
-    ) |>
+    dplyr::group_modify(~ {
+      grp <- .x
+      base <- data.frame(
+        Count      = nrow(grp),
+        Share      = nrow(grp) / total_units,
+        Pre_Total  = sum(grp$pre, na.rm = TRUE),
+        Post_Total = sum(grp$post, na.rm = TRUE),
+        Avg_Change = mean(grp$change_rate_mo, na.rm = TRUE),
+        Avg_Local_Mean = mean(grp$local_gi_mean, na.rm = TRUE)
+      )
+      if (has_nbr) {
+        union_geoids <- unique(unlist(grp$neighbor_geoids))
+        nbr_rows <- df[df$GEOID %in% union_geoids, ]
+        base$Pre_Neighbor_Total  <- sum(nbr_rows$pre, na.rm = TRUE)
+        base$Post_Neighbor_Total <- sum(nbr_rows$post, na.rm = TRUE)
+      } else {
+        base$Pre_Neighbor_Total  <- NA_real_
+        base$Post_Neighbor_Total <- NA_real_
+      }
+      base
+    }) |>
     dplyr::mutate(significance = factor(significance, levels = levels_order)) |>
     dplyr::arrange(significance)
 }
@@ -1160,13 +1201,8 @@ filter_panel_register <- div(
     div(class = "register-header", span("Map & Graph Controls")),
     div(
       class = "register-row",
-      span("Incident Severity"),
-      selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
-    ),
-    div(
-      class = "register-row",
       span("Road User Class"),
-      checkboxGroupInput(inputId = "mode", label = NULL, choices = c("Pedestrian", "Bicyclist"), selected = c("Pedestrian", "Bicyclist"), inline = TRUE)
+      selectInput(inputId = "mode", label = NULL, choices = c("All", "Pedestrian", "Bicyclist"), selected = "All", width = "160px")
     ),
     div(
       class = "register-row",
@@ -1204,7 +1240,7 @@ overview_page <- div(
   layout_columns(
     col_widths = c(12),
     div(
-      h1(class = "page-title", "Impacts of California AB-413 \"Daylighting Law\" on Pedestrian and Bicyclist Safety")
+      h1(class = "page-title", "Impacts of California AB 413 \"Daylighting Law\" on Pedestrian and Bicyclist Safety")
     )
   ),
   layout_columns(
@@ -1294,32 +1330,32 @@ overview_page <- div(
   "))
       ),
       tags$div(
-        class = "document-card specimen-section",
-        style = "margin-top: 16px;",
-        tags$h3(
-          style = "font-family:'Playfair Display',serif; font-weight:400; font-size:1.7rem; color: var(--brand-navy); margin: 0 0 8px 0;",
-          "Daylighting Types"
-        ),
+        div(class = "document-card-title", "Daylighting Types"),
+        # style = "margin-top: 16px;",
+        # tags$h3(
+        #   style = "font-family:'Playfair Display',serif; font-weight:400; font-size:1.7rem; color: var(--brand-navy); margin: 0 0 8px 0;",
+        #   "Daylighting Types"
+        # ),
         tags$p(
           style = "color: var(--brand-ink); line-height: 1.7; font-size: 0.92rem; max-width: 720px;",
-          "............."
+          "There are several forms of daylighting. While AB 413 only implements red-curb daylighting, several cities, including Californian cities, have used other forms of daylighting."
         ),
         tags$div(
           class = "specimen-grid",
           daylighting_specimen(
             img_src = "vandykeave_vandykepl-redcurb.png",
             title = "Painted Red Curb",
-            description = "FILL"
+            description = "Red curbs are the most affordable form of daylighting and are the style being implemented in respose to AB 413. A study by the New York City transportation department found no safety benefit from this form of daylighting."
           ),
           daylighting_specimen(
             img_src = "seventh&island-bulbout.png",
             title = "Curb Extension (Bulb-Out)",
-            description = "DESCRIPTION"
+            description = "Curb extention daylighting is a form of daylighting where the road is phyiscally narrowed at intersections. This improves pedestrian safety by reducing the crossing distance and creating natural turn calming due to a narrower roadway."
           ),
           daylighting_specimen(
             img_src = "haynes&laguna-hardened-bicycle.png",
             title = "Hardened Daylighting",
-            description = "FILL"
+            description = "Hardened daylighting is a form of daylighting in which a physical barrier is placed within the roadway to prevent parking. Examples include bicycle racks or planters. The New York City transportation department found this to be more effective than sign-only daylighting."
           )
         )
       )
@@ -1350,20 +1386,16 @@ maps_page <- div(
         div(
           class = "register-container",
           div(class = "register-header", span("Map & Graph Controls")),
+
           div(
             class = "register-row",
-            span("Incident Severity"),
-            selectInput(inputId = "victim_type", label = NULL, choices = c("All Incidents", "Injuries", "Fatalities"), selected = "All Incidents", width = "160px")
-          ),
-          div(
-            class = "register-row",
-            span("Worst Injury Severity"),
+            span("Injury Severity"),
             selectInput(inputId = "collision_severity", label = NULL, choices = "All", selected = "All", width = "160px")
           ),
           div(
             class = "register-row",
             span("Road User Class"),
-            checkboxGroupInput(inputId = "mode", label = NULL, choices = c("Pedestrian", "Bicyclist"), selected = c("Pedestrian", "Bicyclist"), inline = TRUE)
+            selectInput(inputId = "mode", label = NULL, choices = c("All", "Pedestrian", "Bicyclist"), selected = "All", width = "160px")
           ),
           div(
             class = "register-row",
@@ -1399,9 +1431,7 @@ maps_page <- div(
                                   "County" = "county", "Crash Location" = "location"),
                       selected = "none", width = "160px")
         )
-      ),
-      uiOutput("cluster_warning"),
-      uiOutput("range_warning")
+      )
     ),
     # Right Layout
     div(
@@ -1411,32 +1441,35 @@ maps_page <- div(
         leafletOutput("map", height = "500px")
       ),
       div(
+        class = "cluster-warning-banner",
+        uiOutput("cluster_warning")
+      ),
+      div(
         style = "border-top: 1px solid var(--brand-border); padding-top: 16px; margin-top: 20px;",
         plotlyOutput(outputId = "main_plot", height = "320px")
+      ),
+      div(
+        class = "range-warning-banner",
+        uiOutput("range_warning")
       )
     )
   )
 )
 
-# Reusable per-city block for the Hot & Cold Spot Analysis methodology tab.
-# Follows the same document-card / results-table formatting used elsewhere
-# on the Methodology and Results pages. The map/table for each city react to
-# the shared "hotspot_scenario" control (Warning vs. Enforcement phase).
-hotspot_city_section <- function(city_name) {
+hotspot_city_section <- function(city_name, show_title = TRUE) {
   slug <- gsub(" ", "_", tolower(city_name))
   tagList(
-    div(class = "document-card-title", city_name),
+    if (show_title) div(class = "document-card-title", city_name),
     div(
       class = "map-workspace-container",
       div(
         class = "map-legend-banner",
         style = "display: flex; justify-content: space-between; align-items: center;",
-        span(paste0(toupper(city_name), " — HOT / COLD SPOT MAP")),
-        
+
         radioButtons(
           inputId  = paste0("geom_type_", slug),
           label    = NULL,
-          choices  = list("Block Groups" = "bg", "Hexagons" = "hex"),   # was c(...)
+          choices  = list("Block Groups" = "bg", "Census Tracts" = "tract", "Hexagons" = "hex"),
           selected = "bg",
           inline   = TRUE
         )
@@ -1496,6 +1529,11 @@ methodology_page <- div(
                   tags$td(class = "var-role", "Dependent Variable")
                 ),
                 tags$tr(
+                  tags$td(class = "var-name", HTML("&tau;")),
+                  tags$td("Estimated treatment effect at the cutoff, the coefficient of interest."),
+                  tags$td(class = "var-role", "Coefficient of Interest")
+                ),
+                tags$tr(
                   tags$td(class = "var-name", HTML("D<sub>t</sub>")),
                   tags$td("Indicator equal to 1 for periods after the enforcement cutoff."),
                   tags$td(class = "var-role", "Key Independent Variable")
@@ -1517,14 +1555,10 @@ methodology_page <- div(
                 ),
                 tags$tr(
                   tags$td(class = "var-name", HTML("h")),
-                  tags$td("Bandwidth defining the estimation window around the cutoff, selected via MSE-optimal procedure."),
+                  tags$td("Bandwidth defining the estimation window around the cutoff."),
                   tags$td(class = "var-role", "Tuning Parameter")
                 ),
-                tags$tr(
-                  tags$td(class = "var-name", HTML("&tau;")),
-                  tags$td("Estimated treatment effect at the cutoff, the coefficient of interest."),
-                  tags$td(class = "var-role", "Coefficient of Interest")
-                ),
+
                 tags$tr(
                   tags$td(class = "var-name", HTML("&epsilon;<sub>t</sub>")),
                   tags$td("Idiosyncratic error term."),
@@ -1549,7 +1583,7 @@ methodology_page <- div(
       div(class = "document-card-title", "Bandwidth & Kernel Selection"),
       div(class = "document-card document-card--bandwidth",
           p(
-            "Because the RD estimate can be sensitive to the number of data points on either side of the cutoff, we tested a range of bandwidths and kernel choices and selected the specification that produced the most stable, lowest-variance estimates. See the Results page for the comparison across bandwidths.",
+            "We choose a bandwidth wide enough to produce estimates with a tight confidence interval, but narrow enough to avoid contamination from observations far from the cutoff. See the Results page for the comparison across bandwidths.",
             style = "color: var(--brand-ink); line-height: 1.7;"
           )
       ),
@@ -1577,7 +1611,7 @@ methodology_page <- div(
           ),
           tags$ul(
             style = "color: var(--brand-ink); line-height: 1.7; padding-left: 20px;",
-            tags$li(tags$strong("By lighting condition. "), "Daylight vs. dark-time crashes, to test whether the effect concentrates in low-visibility conditions where daylighting theoretically matters most."),
+            tags$li(tags$strong("By lighting condition. "), "Daytime vs. nighttime crashes, to test whether the effect concentrates in low-visibility conditions where daylighting theoretically matters most."),
             tags$li(tags$strong("By crash severity. "), "Fatal, suspected serious injury, suspected minor injury, and possible injury/complaint of pain, to test whether the policy affects crash frequency broadly or is concentrated in specific outcomes.")
           )
       ),
@@ -1599,20 +1633,21 @@ methodology_page <- div(
       div(class = "document-card-title", "Hot & Cold Spot Analysis (Getis-Ord Gi*)"),
       div(class = "document-card document-card--hotspot",
           p(
-            "To complement the statewide RDiT results, we conduct a spatial hot spot analysis using the Getis-Ord Gi* statistic to identify statistically significant clusters of pedestrian and bicyclist crashes at a finer geographic scale. This analysis focuses on three of California's largest cities — Los Angeles, San Diego, and San Francisco — to examine whether crash clustering patterns shifted meaningfully after the implementation of AB 413.",
+            "To complement the statewide RDiT results, we conduct a spatial hot spot analysis using the Getis-Ord Gi* statistic to identify statistically significant clusters of pedestrian intersection crashes at a finer geographic scale. This analysis focuses on three of California's largest cities — Los Angeles, San Diego, and San Francisco.",
             style = "color: var(--brand-ink); line-height: 1.7;"
           ),
           p(
-            "For each city, block groups are compared on their change in monthly pedestrian/bicyclist crash rate between a pre- and post-policy window. Spatial weights use a k-nearest-neighbor structure, with k selected per city by sweeping k = 6 to 16 (step 2) and choosing the value that maximizes the z-score of a global Moran's I test on that change-in-rate variable. The Getis-Ord Gi* statistic (via ",
+            "For each city, different levels of geography (block groups, census tracts, and hexagons) are compared on their change in monthly pedestrian intersection crash rate between a pre- and post-policy window. Spatial clustering uses a k-nearest-neighbor structure, where at each level of analysis, units are clustered with k surrounding units to identify hot and cold spots. A small k value will result in an a localized neighborhood, leading to high variance and less stable estimates. A large k value will smooth out and hide local variations. The optimal size k for each map is chosen by finding the k value that maximizes the z-score of a global Moran's I statistical test. The Getis-Ord Gi* statistic (via ",
             tags$code("spdep::localG()"),
-            ") is then computed at that optimal k, and each block group is classified as a hot spot, cold spot, or not significant at the 90%, 95%, or 99% confidence level based on its two-tailed p-value.",
+            ") is then computed at that optimal k, and each geography is classified as a hot spot, cold spot, or not significant at the 90%, 95%, or 99% confidence level based on its two-tailed p-value.",
             style = "color: var(--brand-ink); line-height: 1.7;"
           ),
           p(
-            "Two comparison windows are modeled per city: a ", tags$strong("Warning Phase"),
-            " window fixed at the January 2024 statewide warning date (one year pre vs. one year post), and an ",
-            tags$strong("Enforcement Phase"),
-            " window keyed to each city's own citation-enforcement start date, extended through the most recent data available.",
+            "Two comparison windows are used per city: a window fixed at the January 2024 statewide warning date (one year pre vs. one year post), and a window at each city's own citation-enforcement start date, extended through the end of 2025, the most recent data available.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          ),
+          p(
+            "This is an exploratory spatial data analysis to identify spatial autocorrelation and localized heterogeneity across change hotspots, while our RDiT model should be used to draw conclusions about the effectiveness of the policy.",
             style = "color: var(--brand-ink); line-height: 1.7;"
           )
       ),
@@ -1634,12 +1669,12 @@ methodology_page <- div(
               tags$tbody(
                 tags$tr(
                   tags$td(class = "var-name", "change_rate_mo"),
-                  tags$td("Change in pedestrian/bicyclist crashes per month at a block group, post-window rate minus pre-window rate."),
+                  tags$td("Change in pedestrian intersection crashes per month at a block group, post-window rate minus pre-window rate."),
                   tags$td(class = "var-role", "Outcome Variable")
                 ),
                 tags$tr(
                   tags$td(class = "var-name", HTML("G<sub>i</sub><sup>*</sup> (z-score)")),
-                  tags$td("Getis-Ord local statistic (computed via spdep::localG) measuring the degree of spatial clustering of high or low change_rate_mo values around block group i; reported directly as a z-score."),
+                  tags$td("Getis-Ord local statistic measuring the degree of spatial clustering of high or low change_rate_mo values around block group i; calculated as a z-score."),
                   tags$td(class = "var-role", "Test Statistic")
                 ),
                 tags$tr(
@@ -1654,7 +1689,7 @@ methodology_page <- div(
                 ),
                 tags$tr(
                   tags$td(class = "var-name", "k (nearest neighbors)"),
-                  tags$td("Spatial weights parameter — number of nearest block-group centroids treated as neighbors; chosen per city via a Moran's I sweep over k = 6–16."),
+                  tags$td("Number of nearest centroids treated as neighbors; chosen per city and level of geography via a Moran's I test. Values capped between k = 6 and k = 16."),
                   tags$td(class = "var-role", "Tuning Parameter")
                 )
               )
@@ -1665,36 +1700,16 @@ methodology_page <- div(
       hr(class = "double-hr"),
       
       # CITY SUMMARY
-      div(class = "document-card-title", "Cities Under Study"),
+      div(class = "document-card-title", "Selected Cities"),
       div(class = "document-card document-card--cities",
           p(
-            "We selected Los Angeles, San Diego, and San Francisco for city-level analysis because they represent California's three largest metropolitan areas with dense, high-volume pedestrian and bicyclist activity, and each has a sufficiently large sample of intersection-level crashes to support reliable local cluster detection.",
+            "We selected Los Angeles, San Diego, and San Francisco for city-level analysis. They are three of California's largest incorporated cities, with high-volume pedestrian activity, and each has a sufficiently large sample of intersection-level crashes to support reliable local cluster detection. Notably, all three cities had already implemented early daylighting measures, such as curb extensions or painted curbs at high-risk intersections before AB 413 was enacted. Because exact geocoded locations for these daylighting sites were not available, evaluating hot and cold spots allows us to identify areas where pedestrian risks remain elevated despite existing policy interventions.",
             style = "color: var(--brand-ink); line-height: 1.7;"
           )
-      ),
-      
-      div(
-        class = "register-container",
-        div(class = "register-header", span("Comparison Window")),
-        div(
-          class = "register-row",
-          span("Scenario"),
-          radioButtons(
-            inputId = "hotspot_scenario", label = NULL,
-            choices = list("Warning Phase (Jan 2024 baseline)" = "Warning_Date",
-                           "Enforcement Phase (city-specific)" = "Enforcement_Date"),
-            selected = "Enforcement_Date", inline = TRUE
-          )
-        )
-      ),
-      
-      hotspot_city_section("Los Angeles"),
-      hotspot_city_section("San Diego"),
-      hotspot_city_section("San Francisco")
+      )
     )
-  )
 )
-
+)
 results_page <- div(
   class = "page-content",
   h1(class = "page-title", "Results"),
@@ -1786,21 +1801,58 @@ results_page <- div(
         plotOutput("city_rd_plot", height = "480px")
       ),
       
-      div(class = "document-card-title", "Individual City RDiT Models"),
+      hr(class = "double-hr"),
+      
+      div(class = "document-card-title", "Individual City Detail"),
+      div(
+        class = "document-card",
+        p(
+          "Each city panel below shows its RDiT model alongside the corresponding Getis-Ord Gi* hot & cold spot results. See the Methodology page for details on both models and variable definitions.",
+          style = "line-height:1.8;"
+        )
+      ),
+      
+      div(
+        class = "register-container",
+        div(class = "register-header", span("Hot & Cold Spot Comparison Window")),
+        div(
+          class = "register-row",
+          span("Scenario"),
+          radioButtons(
+            inputId = "hotspot_scenario", label = NULL,
+            choices = list("Warning Phase (Jan 2024 baseline)" = "Warning_Date",
+                           "Enforcement Phase (city-specific)" = "Enforcement_Date"),
+            selected = "Enforcement_Date", inline = TRUE
+          )
+        )
+      ),
+      
       accordion(
         id = "city_rdit_accordion",
         open = FALSE,
         accordion_panel(
-          title = "San Diego",
-          plotOutput("city_rdit_san_diego", height = "380px")
+          title = "SAN DIEGO",
+          div(class = "document-card-title", "RDiT Model"),
+          plotOutput("city_rdit_san_diego", height = "380px"),
+          hr(class = "double-hr"),
+          div(class = "document-card-title", "Hot & Cold Spot Analysis"),
+          hotspot_city_section("San Diego", show_title = FALSE)
         ),
         accordion_panel(
-          title = "San Francisco",
-          plotOutput("city_rdit_san_francisco", height = "380px")
+          title = "SAN FRANCISCO",
+          div(class = "document-card-title", "RDiT Model"),
+          plotOutput("city_rdit_san_francisco", height = "380px"),
+          hr(class = "double-hr"),
+          div(class = "document-card-title", "Hot & Cold Spot Analysis"),
+          hotspot_city_section("San Francisco", show_title = FALSE)
         ),
         accordion_panel(
-          title = "Los Angeles",
-          plotOutput("city_rdit_la", height = "380px")
+          title = "LOS ANGELES",
+          div(class = "document-card-title", "RDiT Model"),
+          plotOutput("city_rdit_la", height = "380px"),
+          hr(class = "double-hr"),
+          div(class = "document-card-title", "Hot & Cold Spot Analysis"),
+          hotspot_city_section("Los Angeles", show_title = FALSE)
         )
       ),
       
@@ -1915,10 +1967,12 @@ about_page <- div(
     class = "document-card",
     style = "display: flex; justify-content: space-around; flex-wrap: wrap; gap: 32px; padding: 32px 28px;",
     team_member_card(
+      img_src = "kyle.JPG",
       name = "Kyle Klemba",
       description = "Data Science & Economics, William & Mary"
     ),
     team_member_card(
+      img_src = "pride.JPG",
       name = "Pride Akana Techa",
       description = "Computer Science & Mathematics, Berea College"
     )
@@ -1947,12 +2001,12 @@ about_page <- div(
     style = "display: flex; justify-content: space-around; flex-wrap: wrap; gap: 32px; padding: 32px 28px;",
     team_member_card(
       img_src = "drgao.png",
-      name = "Dr. Yujuan Gao",
+      name = "Yujuan Gao, PhD",
       description =  "Department of Agricultural and Applied Economics, Virginia Tech"
     ),
     team_member_card(
       img_src = "drcary.jpg",
-      name = "Dr. Michael Cary",
+      name = "Michael Cary, PhD",
       description = "Department of Agricultural and Applied Economics, Virginia Tech"
     )
   ),
@@ -2046,21 +2100,14 @@ server <- function(input, output, session) {
   })
   
   apply_filters <- function(data) {
-    if (input$victim_type == "Fatalities") {
-      data <- data %>% filter(COUNT_PED_KILLED > 0 | COUNT_BICYCLIST_KILLED > 0)
-    } else if (input$victim_type == "Injuries") {
-      data <- data %>% filter(COUNT_PED_INJURED > 0 | COUNT_BICYCLIST_INJURED > 0)
-    }
-    if (!is.null(input$mode) && length(input$mode) > 0) {
-      ped_selected <- "Pedestrian" %in% input$mode
-      bic_selected <- "Bicyclist" %in% input$mode
-      if (ped_selected && bic_selected) {
-        data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
-      } else if (ped_selected) {
-        data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y")
-      } else if (bic_selected) {
-        data <- data %>% filter(BICYCLE_ACCIDENT == "Y")
-      }
+    mode_val <- if (is.null(input$mode)) "" else input$mode[1]
+    
+    if (mode_val == "Pedestrian") {
+      data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y")
+    } else if (mode_val == "Bicyclist") {
+      data <- data %>% filter(BICYCLE_ACCIDENT == "Y")
+    } else if (mode_val == "All") {
+      data <- data %>% filter(PEDESTRIAN_ACCIDENT == "Y" | BICYCLE_ACCIDENT == "Y")
     } else {
       data <- data %>% filter(FALSE)
     }
@@ -2082,45 +2129,47 @@ server <- function(input, output, session) {
     return(data)
   }
   
-  # add debounce to slider so dragging doesn't fire a filter instantly
   date_range_debounced <- reactive({ input$date_range }) %>% debounce(400)
   
   filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) }) %>%
-    bindCache(input$victim_type, input$mode, input$location_type,
+    bindCache(input$mode, input$location_type,
               input$collision_severity, input$county, date_range_debounced())
   
   filtered_data_map <- reactive({ apply_filters(bike_or_ped_acc_sf) }) %>%
-    bindCache(input$victim_type, input$mode, input$location_type,
+    bindCache(input$mode, input$location_type,
               input$collision_severity, input$county, date_range_debounced())
   
-  # debounce the map-facing data an extra step so rapid filter toggles
-  # (e.g. clicking multiple checkboxes quickly) coalesce into one redraw
   filtered_data_map_debounced <- filtered_data_map %>% debounce(200)
   
   output$cluster_warning <- renderUI({
     data_map <- filtered_data_map()
-    req(nrow(data_map) > MAX_CLUSTER_POINTS)
-    div(
-      style = "font-family: monospace; font-size: 0.75rem; color: #7A5205; background: #FCF1DA; padding: 10px; margin-top: 12px; border: 1px solid #F5E0B7; border-radius:3px;",
-      "Individual/clustered points only display below ",
-      scales::comma(MAX_CLUSTER_POINTS),
-      " records to keep the map responsive. Current selection is ",
-      scales::comma(nrow(data_map)),
-      " points — showing the heatmap layer instead."
-    )
+    if (nrow(data_map) > MAX_CLUSTER_POINTS) {
+      div(
+        class = "inline-warning-content",
+        "Clustered points only display below ",
+        scales::comma(MAX_CLUSTER_POINTS),
+        " records. Current selection is ",
+        scales::comma(nrow(data_map)),
+        " points. Displaying heatmap only."
+      )
+    } else {
+      NULL
+    }
   })
   
-  output$range_warning <- renderUI({
-    req(input$granularity == "year")
-    start_partial <- format(as.Date(input$date_range[1]), "%m") != "01"
-    end_partial   <- format(as.Date(input$date_range[2]), "%m") != "12"
-    if (start_partial || end_partial) {
-      div(
-        style = "font-family: monospace; font-size: 0.75rem; color: #7A5205; background: #FCF1DA; padding: 10px; margin-top: 12px; border: 1px solid #F5E0B7; border-radius:3px;",
-        "Incomplete year chosen. Output may reflect truncated annual aggregates."
-      )
-    } else { NULL }
-  })
+  # output$range_warning <- renderUI({
+  #   req(input$granularity == "year")
+  #   start_partial <- format(as.Date(input$date_range[1]), "%m") != "01"
+    # end_partial   <- format(as.Date(input$date_range[2]), "%m") != "12"
+    # if (start_partial || end_partial) {
+    #   div(
+    #     class = "inline-warning-content",
+    #     "Incomplete year chosen. Output will reflect truncated annual aggregates for incomplete year."
+    #   )
+    # } else {
+    #   NULL
+    # }
+  # })
   
   output$main_plot <- renderPlotly({
     if (nrow(filtered_data_graph()) == 0) {
@@ -2134,14 +2183,35 @@ server <- function(input, output, session) {
       plot_data <- filtered_data_graph() %>% filter(!is.na(COLLISION_DATE))
       period_var <- if (input$granularity == "year") "year" else "month"
       
+      if (input$granularity == "year") {
+        dr <- date_range_debounced()
+        start_year <- lubridate::year(dr[1])
+        end_year   <- lubridate::year(dr[2])
+        start_partial <- format(as.Date(dr[1]), "%m") != "01"
+        end_partial   <- format(as.Date(dr[2]), "%m") != "12"
+        
+        exclude_years <- c(
+          if (start_partial) start_year,
+          if (end_partial) end_year
+        )
+        if (length(exclude_years) > 0) {
+          plot_data <- plot_data %>% filter(!(lubridate::year(COLLISION_DATE) %in% exclude_years))
+        }
+      }
+      
       color_choice <- if (is.null(input$color_by)) "none" else input$color_by
+      
+      format_period <- function(x) {
+        if (input$granularity == "year") as.character(x) else format(x, "%b %Y")
+      }
       
       if (color_choice == "none") {
         
         summary_data <- plot_data %>%
           group_by(ACCIDENT_PERIOD = .data[[period_var]]) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
-          arrange(ACCIDENT_PERIOD)
+          arrange(ACCIDENT_PERIOD) %>%
+          mutate(ACCIDENT_PERIOD = format_period(ACCIDENT_PERIOD))
         
         plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD) %>%
           add_trace(
@@ -2151,9 +2221,12 @@ server <- function(input, output, session) {
             marker = list(color = brand$muted)
           ) %>%
           layout(
+            dragmode = FALSE,
             margin = list(t = 10, b = 40, l = 40, r = 10),
-            xaxis = list(title = "", showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
-            yaxis = list(title = "Incident Count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+            xaxis = list(title = "", showgrid = FALSE, fixedrange = TRUE, type = "category",
+                         categoryorder = "array", categoryarray = summary_data$ACCIDENT_PERIOD,
+                         font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+            yaxis = list(title = "Incident Count", showgrid = TRUE, gridcolor = brand$border, fixedrange = TRUE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
             plot_bgcolor  = "rgba(0,0,0,0)",
             paper_bgcolor = "rgba(0,0,0,0)"
           ) %>%
@@ -2161,8 +2234,6 @@ server <- function(input, output, session) {
         
       } else {
         
-        # Secondary color-aggregation: split each period's bar into a stacked
-        # breakdown by road-user type, injury severity, county, or crash location.
         if (color_choice == "mode") {
           plot_data <- plot_data %>%
             mutate(Category = case_when(
@@ -2190,8 +2261,6 @@ server <- function(input, output, session) {
             "Unknown" = brand$border
           )
         } else if (color_choice == "county") {
-          # Only the top N counties (by record count in the current filtered
-          # selection) get their own color; everything else rolls into "Other".
           top_counties <- plot_data %>%
             filter(!is.na(COUNTY)) %>%
             dplyr::count(COUNTY, sort = TRUE) %>%
@@ -2228,7 +2297,10 @@ server <- function(input, output, session) {
           group_by(ACCIDENT_PERIOD = .data[[period_var]], Category) %>%
           summarise(Total_Accidents = n(), .groups = "drop") %>%
           mutate(Category = factor(Category, levels = category_order)) %>%
-          arrange(ACCIDENT_PERIOD, Category)
+          arrange(ACCIDENT_PERIOD, Category) %>%
+          mutate(ACCIDENT_PERIOD = format_period(ACCIDENT_PERIOD))
+        
+        period_order <- unique(summary_data$ACCIDENT_PERIOD)
         
         p <- plot_ly(data = summary_data, x = ~ACCIDENT_PERIOD)
         
@@ -2243,11 +2315,14 @@ server <- function(input, output, session) {
         }
         
         p %>% layout(
+          dragmode = FALSE,
           barmode = "stack",
           margin = list(t = 10, b = 40, l = 40, r = 10),
           legend = list(font = list(family = "monospace", size = 10)),
-          xaxis = list(title = "", showgrid = FALSE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
-          yaxis = list(title = "Incident Count", showgrid = TRUE, gridcolor = brand$border, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+          xaxis = list(title = "", showgrid = FALSE, fixedrange = TRUE, type = "category",
+                       categoryorder = "array", categoryarray = period_order,
+                       font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
+          yaxis = list(title = "Incident Count", showgrid = TRUE, gridcolor = brand$border, fixedrange = TRUE, font = list(family = "monospace"), tickfont = list(family = "monospace", size = 10, color = brand$muted)),
           plot_bgcolor  = "rgba(0,0,0,0)",
           paper_bgcolor = "rgba(0,0,0,0)"
         ) %>%
@@ -2257,9 +2332,6 @@ server <- function(input, output, session) {
   })
   
   output$map <- renderLeaflet({
-    # isolate() so this render block only ever runs once at session start —
-    # it should not react to filter changes (those are handled by the
-    # leafletProxy observer below, which preserves the user's zoom/pan).
     initial_coords <- isolate(filtered_data_map())
     
     m <- leaflet(options = leafletOptions(attributionControl = FALSE, preferCanvas = TRUE)) %>%
@@ -2297,7 +2369,6 @@ server <- function(input, output, session) {
     m
   })
   
-  # Updates dropdown menus safely on initialization
   observe({
     updateSelectInput(session, "collision_severity",
                       choices = c("All" = "All", severity_labels),
@@ -2309,7 +2380,6 @@ server <- function(input, output, session) {
     )
   })
   
-  # Updates spatial markers on mapping filters change
   observe({
     coords <- filtered_data_map_debounced()
     n_total <- nrow(coords)
@@ -2329,8 +2399,6 @@ server <- function(input, output, session) {
           group = "Accident Heatmap"
         )
       
-      # Clustered individual markers only for smaller selections — this is
-      # the layer most likely to freeze or crash the browser at high volume.
       if (n_total <= MAX_CLUSTER_POINTS) {
         proxy %>% addCircleMarkers(
           data = coords, lng = ~lng, lat = ~lat,
@@ -2441,7 +2509,6 @@ server <- function(input, output, session) {
     )
   })
   
-  # Bicyclist Crash Outcome
   # Bicyclist Crash Outcome
   output$bicyclist_results_table <- renderUI({
     results_df <- tibble::tibble(
@@ -2815,8 +2882,11 @@ server <- function(input, output, session) {
         req(res)
         
         selected_geom <- input[[paste0("geom_type_", slug)]] %||% "bg"
-        active_panel  <- if (selected_geom == "hex") res$hex_panel else res$bg_panel
-        
+        active_panel  <- switch(selected_geom,
+                                "hex"   = res$hex_panel,
+                                "tract" = res$tract_panel,
+                                res$bg_panel
+        )        
         validate(
           need(!is.null(active_panel), sprintf("Data is not available for %s under this spatial layer.", city_name))
         )
@@ -2834,18 +2904,31 @@ server <- function(input, output, session) {
                 tags$th("Share"),
                 tags$th("Pre Total"),
                 tags$th("Post Total"),
+                tags$th("Pre Total (Neighborhood)"),
+                tags$th("Post Total (Neighborhood)"),
                 tags$th("Avg. Mo. Change (Own)"),
                 tags$th("Avg. Mo. Change (Neighborhood)")
               )
             ),
             tags$tbody(
-              purrr::pmap(summary_df, function(significance, Count, Share, Pre_Total, Post_Total, Avg_Change, Avg_Local_Mean) {
+              purrr::pmap(summary_df, function(significance, Count, Share, Pre_Total, Post_Total,
+                                               Pre_Neighbor_Total, Post_Neighbor_Total,
+                                               Avg_Change, Avg_Local_Mean) {
+                sig_color <- hot_cold_colors[[as.character(significance)]]
+                row_bg    <- scales::alpha(sig_color, 0.16)
                 tags$tr(
-                  tags$td(class = "cutoff-name", as.character(significance)),
+                  style = sprintf("background-color: %s;", row_bg),
+                  tags$td(
+                    class = "cutoff-name",
+                    style = sprintf("color: %s; font-weight: 700; border-left: 5px solid %s; padding-left: 12px;", sig_color, sig_color),
+                    as.character(significance)
+                  ),
                   tags$td(scales::comma(Count)),
                   tags$td(scales::percent(Share, accuracy = 0.1)),
                   tags$td(scales::comma(Pre_Total)),
                   tags$td(scales::comma(Post_Total)),
+                  tags$td(scales::comma(Pre_Neighbor_Total)),
+                  tags$td(scales::comma(Post_Neighbor_Total)),
                   tags$td(sprintf("%.2f", Avg_Change)),
                   tags$td(sprintf("%.2f", Avg_Local_Mean))
                 )
