@@ -10,7 +10,7 @@ rm(list = ls())
 
 # Load packages
 library(tidyverse)
-library(plotly)
+
 
 
 # Data Cleaning and Aggregation (TIMS) ---------------------------------------
@@ -36,7 +36,7 @@ source("initial-analysis/scripts/TIMS-Analysis/08_TIMS_city_RDiT.R")
 ## Heterogeneity Analysis ##
 source("initial-analysis/scripts/TIMS-Analysis/13_TIMS_lighting.R")
 source("initial-analysis/scripts/TIMS-Analysis/16_TIMS_Collision_Severity.R")
-source("initial-analysis/scripts/TIMS-Analysis/13_TIMS_weather.R")
+source("initial-analysis/scripts/TIMS-Analysis/14_TIMS_weather.R")
 
 ## Robustness Checks ##
 source("initial-analysis/scripts/TIMS-Analysis/12_TIMS_placebo.R")
