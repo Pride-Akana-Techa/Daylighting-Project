@@ -347,15 +347,6 @@ app_theme <- bs_theme(
     .filter-sticky-col::-webkit-scrollbar { width: 6px; }
     .filter-sticky-col::-webkit-scrollbar-thumb { background: var(--brand-border); border-radius: 3px; }
 
-    .map-loading-note {
-      font-family: monospace;
-      font-size: 0.72rem;
-      color: var(--brand-muted);
-      padding: 6px 20px;
-      background: var(--brand-surface);
-      border-top: 1px solid var(--brand-border);
-    }
-
     /* Literature review content (pulled in from Word doc via pandoc) */
     .lit-content h1, .lit-content h2, .lit-content h3 {
       font-family: 'Playfair Display', serif;
@@ -551,9 +542,8 @@ severity_labels_rev <- setNames(names(severity_labels), severity_labels)
 
 # Map-performance caps: keep the browser responsive and avoid crashes when a
 # filter selection still matches a very large number of records
-MAX_MAP_POINTS     <- 20000  
-MAX_CLUSTER_POINTS <- 8000   
-TOP_N_COUNTIES     <- 10     
+MAX_CLUSTER_POINTS <- 8000   # individual/clustered markers only shown below this count
+TOP_N_COUNTIES     <- 15     # counties shown individually in the graph's "County" color-by legend; rest grouped as "Other"
 
 # Convert word to HTML
 docx_path <- normalizePath("shiny-data/literature_review.docx", mustWork = TRUE)
@@ -696,6 +686,103 @@ p_2025 <- make_cutoff_plot(
 statewide_rdit_plot <- p_2024 + p_2025
 
 # ==========================================================================
+# Hot & Cold Spot Analysis (Getis-Ord Gi*) — precomputed results
+# ==========================================================================
+# This expects the `results` object produced by the offline Gi* analysis
+# script (per-city, per-scenario block-group panels with localG z-scores),
+# saved into shiny-data/ alongside the app's other datasets, e.g. add this
+# line to the end of the offline script:
+#   saveRDS(results, "shiny-data/gi_results_by_city_scenarios.rds")
+# Wrapped in tryCatch so the app still loads (with a friendly in-app message
+# on the Hot & Cold Spot Analysis tab) if that file isn't present yet.
+hotspot_results <- tryCatch(
+  readRDS("shiny-data/gi_results_by_city_scenarios.rds"),
+  error = function(e) NULL
+)
+
+hot_cold_colors <- c(
+  "Hot Spot (99% Conf.)"  = "#b2182b",
+  "Hot Spot (95% Conf.)"  = "#ef8a62",
+  "Hot Spot (90% Conf.)"  = "#fddbc7",
+  "Cold Spot (90% Conf.)" = "#d1e5f0",
+  "Cold Spot (95% Conf.)" = "#67a9cf",
+  "Cold Spot (99% Conf.)" = "#2166ac"
+)
+
+# Same map builder used to generate the offline poster figures, reused here
+# so the in-app map matches those exactly.
+# Updated map builder supporting dynamic geometry selection ('bg' or 'hex')
+make_gi_map <- function(res_data, geom_type = "bg", base_size = 13) {
+  if (is.null(res_data)) return(NULL)
+  
+  # Select dynamic panel and metadata based on geom_type toggle
+  panel_data <- if (geom_type == "hex") res_data$hex_panel else res_data$bg_panel
+  optimal_k  <- if (geom_type == "hex") res_data$hex_k else res_data$bg_k
+  unit_name  <- if (geom_type == "hex") "Hexagon Grid" else "Block Groups"
+  
+  if (is.null(panel_data)) return(NULL)
+  
+  city_boundary <- res_data$city_boundary
+  city_lab    <- unique(panel_data$city)
+  scen_lab    <- unique(panel_data$scenario)
+  months_lab  <- unique(panel_data$window_months)
+  
+  title_text    <- sprintf("%s (%s)", city_lab, gsub("_", " ", scen_lab))
+  subtitle_text <- sprintf("Gi* Change in Crashes Per Month (%s | %.1f-Month Window | Optimal k = %d)", 
+                           unit_name, months_lab, optimal_k)
+  
+  ggplot() +
+    geom_sf(data = city_boundary, fill = "#F5F5F5", color = NA) +
+    geom_sf(
+      data = panel_data, aes(fill = significance),
+      color = "#ffffff", linewidth = 0.05, show.legend = TRUE
+    ) +
+    geom_sf(data = city_boundary, fill = NA, color = "#222222", linewidth = 0.6) +
+    scale_fill_manual(
+      values = hot_cold_colors, na.value = "white",
+      na.translate = FALSE, drop = FALSE, name = "Confidence"
+    ) +
+    coord_sf(datum = NA) +
+    theme_minimal(base_size = base_size, base_family = "Helvetica") +
+    labs(title = title_text, subtitle = subtitle_text, x = NULL, y = NULL) +
+    theme(
+      plot.title = element_text(size = 15, face = "bold"),
+      plot.subtitle = element_text(size = 10, face = "italic", color = "grey30"),
+      legend.position = "right",
+      legend.title = element_text(size = 10, face = "bold"),
+      legend.text = element_text(size = 8),
+      panel.grid = element_blank(),
+      plot.margin = margin(10, 10, 10, 10)
+    ) +
+    guides(fill = guide_legend(override.aes = list(fill = hot_cold_colors)))
+}
+
+# Updated summary table builder accepting active panel dataset
+# Updated summary table builder accepting active panel dataset safely
+hotspot_summary_df <- function(active_panel) {
+  if (is.null(active_panel) || nrow(active_panel) == 0) return(NULL)
+  
+  df <- active_panel |> sf::st_drop_geometry()
+  levels_order <- levels(df$significance)
+  total_units <- nrow(df)
+  
+  df |>
+    dplyr::filter(!is.na(significance)) |>
+    dplyr::group_by(significance) |>
+    dplyr::summarise(
+      Count          = dplyr::n(),
+      Share          = Count / total_units,
+      Pre_Total      = sum(pre, na.rm = TRUE),
+      Post_Total     = sum(post, na.rm = TRUE),
+      Avg_Change     = mean(change_rate_mo, na.rm = TRUE),
+      Avg_Local_Mean = mean(local_gi_mean, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(significance = factor(significance, levels = levels_order)) |>
+    dplyr::arrange(significance)
+}
+
+# ==========================================================================
 # Placebo Tests
 # ==========================================================================
 
@@ -780,7 +867,7 @@ filter_panel_register <- div(
     div(
       class = "register-row",
       span("Time Frame"),
-      sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
+      sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2022-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
     )
   )
 )
@@ -982,7 +1069,7 @@ maps_page <- div(
           div(
             class = "register-row",
             span("Time Frame"),
-            sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2014-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
+            sliderInput(inputId = "date_range", label = NULL, min = as.Date("2014-01-01"), max = as.Date("2025-12-31"), value = c(as.Date("2022-01-01"), as.Date("2025-12-31")), ticks = FALSE, timeFormat = "%Y-%m", dragRange = TRUE, width = "200px")
           )
         )
       ),
@@ -1012,8 +1099,7 @@ maps_page <- div(
       class = "maps-right-col",
       div(
         class = "map-workspace-container",
-        leafletOutput("map", height = "500px"),
-        uiOutput("map_sample_note")
+        leafletOutput("map", height = "500px")
       ),
       div(
         style = "border-top: 1px solid var(--brand-border); padding-top: 16px; margin-top: 20px;",
@@ -1023,6 +1109,40 @@ maps_page <- div(
   )
 )
 
+# Reusable per-city block for the Hot & Cold Spot Analysis methodology tab.
+# Follows the same document-card / results-table formatting used elsewhere
+# on the Methodology and Results pages. The map/table for each city react to
+# the shared "hotspot_scenario" control (Warning vs. Enforcement phase).
+hotspot_city_section <- function(city_name) {
+  slug <- gsub(" ", "_", tolower(city_name))
+  tagList(
+    div(class = "document-card-title", city_name),
+    div(
+      class = "map-workspace-container",
+      div(
+        class = "map-legend-banner",
+        style = "display: flex; justify-content: space-between; align-items: center;",
+        span(paste0(toupper(city_name), " — HOT / COLD SPOT MAP")),
+        
+        radioButtons(
+          inputId  = paste0("geom_type_", slug),
+          label    = NULL,
+          choices  = list("Block Groups" = "bg", "Hexagons" = "hex"),   # was c(...)
+          selected = "bg",
+          inline   = TRUE
+        )
+      ),
+      div(
+        style = "padding: 12px 20px;",
+        plotOutput(paste0("hotspot_map_", slug), height = "440px")
+      )
+    ),
+    div(
+      class = "document-card",
+      uiOutput(paste0("hotspot_table_", slug))
+    )
+  )
+}
 methodology_page <- div(
   class = "page-content methodology-page",
   h1(class = "page-title", "Methodology"),
@@ -1163,12 +1283,105 @@ methodology_page <- div(
     ),
     
     nav_panel(
-      title = "Tobit Model (Grid Analysis)",
-      value = "tobit",
-      div(class = "document-card-title", "Tobit Model for Spatial Grid Analysis"),
-      div(class = "document-card",
-          p("Placeholder for Tobit model formula and description.", style = "color: var(--brand-muted);")
-      )
+      title = "Hot & Cold Spot Analysis",
+      value = "hotspot",
+      
+      # OVERVIEW / MODEL SPECIFICATION
+      div(class = "document-card-title", "Hot & Cold Spot Analysis (Getis-Ord Gi*)"),
+      div(class = "document-card document-card--hotspot",
+          p(
+            "To complement the statewide RDiT results, we conduct a spatial hot spot analysis using the Getis-Ord Gi* statistic to identify statistically significant clusters of pedestrian and bicyclist crashes at a finer geographic scale. This analysis focuses on three of California's largest cities — Los Angeles, San Diego, and San Francisco — to examine whether crash clustering patterns shifted meaningfully after the implementation of AB 413.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          ),
+          p(
+            "For each city, block groups are compared on their change in monthly pedestrian/bicyclist crash rate between a pre- and post-policy window. Spatial weights use a k-nearest-neighbor structure, with k selected per city by sweeping k = 6 to 16 (step 2) and choosing the value that maximizes the z-score of a global Moran's I test on that change-in-rate variable. The Getis-Ord Gi* statistic (via ",
+            tags$code("spdep::localG()"),
+            ") is then computed at that optimal k, and each block group is classified as a hot spot, cold spot, or not significant at the 90%, 95%, or 99% confidence level based on its two-tailed p-value.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          ),
+          p(
+            "Two comparison windows are modeled per city: a ", tags$strong("Warning Phase"),
+            " window fixed at the January 2024 statewide warning date (one year pre vs. one year post), and an ",
+            tags$strong("Enforcement Phase"),
+            " window keyed to each city's own citation-enforcement start date, extended through the most recent data available.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          )
+      ),
+      
+      # VARIABLE DEFINITIONS
+      div(class = "document-card-title", "Variable Definitions"),
+      div(class = "document-card document-card--variable",
+          div(
+            class = "var-table-wrap",
+            tags$table(
+              class = "var-table",
+              tags$thead(
+                tags$tr(
+                  tags$th("Variable"),
+                  tags$th("Description"),
+                  tags$th("Role in Analysis")
+                )
+              ),
+              tags$tbody(
+                tags$tr(
+                  tags$td(class = "var-name", "change_rate_mo"),
+                  tags$td("Change in pedestrian/bicyclist crashes per month at a block group, post-window rate minus pre-window rate."),
+                  tags$td(class = "var-role", "Outcome Variable")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", HTML("G<sub>i</sub><sup>*</sup> (z-score)")),
+                  tags$td("Getis-Ord local statistic (computed via spdep::localG) measuring the degree of spatial clustering of high or low change_rate_mo values around block group i; reported directly as a z-score."),
+                  tags$td(class = "var-role", "Test Statistic")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", "p-value"),
+                  tags$td("Two-tailed probability, computed from the Gi* z-score, that the observed clustering could occur under complete spatial randomness."),
+                  tags$td(class = "var-role", "Significance Measure")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", "Confidence Level"),
+                  tags$td("Classification of each block group as a 90%, 95%, or 99% confidence hot spot, cold spot, or not significant."),
+                  tags$td(class = "var-role", "Classification")
+                ),
+                tags$tr(
+                  tags$td(class = "var-name", "k (nearest neighbors)"),
+                  tags$td("Spatial weights parameter — number of nearest block-group centroids treated as neighbors; chosen per city via a Moran's I sweep over k = 6–16."),
+                  tags$td(class = "var-role", "Tuning Parameter")
+                )
+              )
+            )
+          )
+      ),
+      
+      hr(class = "double-hr"),
+      
+      # CITY SUMMARY
+      div(class = "document-card-title", "Cities Under Study"),
+      div(class = "document-card document-card--cities",
+          p(
+            "We selected Los Angeles, San Diego, and San Francisco for city-level analysis because they represent California's three largest metropolitan areas with dense, high-volume pedestrian and bicyclist activity, and each has a sufficiently large sample of intersection-level crashes to support reliable local cluster detection.",
+            style = "color: var(--brand-ink); line-height: 1.7;"
+          )
+      ),
+      
+      div(
+        class = "register-container",
+        div(class = "register-header", span("Comparison Window")),
+        div(
+          class = "register-row",
+          span("Scenario"),
+          radioButtons(
+            inputId = "hotspot_scenario", label = NULL,
+            choices = list("Warning Phase (Jan 2024 baseline)" = "Warning_Date",
+                           "Enforcement Phase (city-specific)" = "Enforcement_Date"),
+            selected = "Enforcement_Date", inline = TRUE
+          )
+        )
+      ),
+      
+      hotspot_city_section("Los Angeles"),
+      hotspot_city_section("San Diego"),
+      hotspot_city_section("San Francisco")
     )
   )
 )
@@ -1696,7 +1909,12 @@ server <- function(input, output, session) {
   })
   
   output$map <- renderLeaflet({
-    leaflet(options = leafletOptions(attributionControl = FALSE, preferCanvas = TRUE)) %>%
+    # isolate() so this render block only ever runs once at session start —
+    # it should not react to filter changes (those are handled by the
+    # leafletProxy observer below, which preserves the user's zoom/pan).
+    initial_coords <- isolate(filtered_data_map())
+    
+    m <- leaflet(options = leafletOptions(attributionControl = FALSE, preferCanvas = TRUE)) %>%
       addProviderTiles(providers$CartoDB.PositronNoLabels) %>%
       addPolygons(
         data = ca_boundary,
@@ -1708,6 +1926,27 @@ server <- function(input, output, session) {
         options = layersControlOptions(collapsed = TRUE)
       ) %>%
       setView(lng = -119.4179, lat = 36.7783, zoom = 6)
+    
+    if (nrow(initial_coords) > 0) {
+      m <- m %>% addHeatmap(
+        data = initial_coords, lng = ~lng, lat = ~lat,
+        blur = 22, max = 0.02, radius = 14,
+        gradient = c("0.2" = "#440154", "0.4" = "#3b528b",
+                     "0.6" = "#21918c", "0.8" = "#5ec962", "1.0" = "#fde725"),
+        group = "Accident Heatmap"
+      )
+      if (nrow(initial_coords) <= MAX_CLUSTER_POINTS) {
+        m <- m %>% addCircleMarkers(
+          data = initial_coords, lng = ~lng, lat = ~lat,
+          radius = 3, stroke = TRUE, color = "white", weight = 0.5,
+          fillColor = brand$navy, fillOpacity = 0.4,
+          clusterOptions = markerClusterOptions(),
+          group = "Accident Clusters"
+        )
+      }
+    }
+    
+    m
   })
   
   # Updates dropdown menus safely on initialization
@@ -1733,18 +1972,9 @@ server <- function(input, output, session) {
       clearGroup("Accident Clusters")
     
     if (n_total > 0) {
-      # Cap the heatmap layer too — huge point counts slow WebGL heat
-      # rendering and are a common source of browser tab crashes.
-      heat_data <- if (n_total > MAX_MAP_POINTS) {
-        dplyr::slice_sample(coords, n = MAX_MAP_POINTS)
-      } else
-    {
-        coords
-      }
-      
       proxy <- proxy %>%
         addHeatmap(
-          data = heat_data, lng = ~lng, lat = ~lat,
+          data = coords, lng = ~lng, lat = ~lat,
           blur = 22, max = 0.02, radius = 14,
           gradient = c("0.2" = "#440154", "0.4" = "#3b528b",
                        "0.6" = "#21918c", "0.8" = "#5ec962", "1.0" = "#fde725"),
@@ -1763,18 +1993,7 @@ server <- function(input, output, session) {
         )
       }
     }
-    
-    output$map_sample_note <- renderUI({
-      req(n_total > MAX_MAP_POINTS)
-      div(
-        class = "map-loading-note",
-        "Heatmap rendered from a ", scales::comma(MAX_MAP_POINTS),
-        "-point sample of ", scales::comma(n_total),
-        " matching records for performance."
-      )
-    })
   })
-  
   
   observe({
     proxy <- leafletProxy("map")
@@ -1857,6 +2076,7 @@ server <- function(input, output, session) {
     )
   })
   
+  # Bicyclist Crash Outcome
   # Bicyclist Crash Outcome
   output$bicyclist_results_table <- renderUI({
     results_df <- tibble::tibble(
@@ -2189,6 +2409,82 @@ server <- function(input, output, session) {
     placebo_plot
   })
   
+  # --- Hot & Cold Spot Analysis: per-city map + summary table ---------------
+  hotspot_cities <- c("Los Angeles", "San Diego", "San Francisco")
+  
+  lapply(hotspot_cities, function(city_name) {
+    local({
+      city_name <- city_name
+      slug <- gsub(" ", "_", tolower(city_name))
+      
+      # Render Map
+      output[[paste0("hotspot_map_", slug)]] <- renderPlot({
+        req(hotspot_results)
+        key <- paste(city_name, input$hotspot_scenario, sep = "_")
+        res <- hotspot_results[[key]]
+        req(res)
+        
+        selected_geom <- input[[paste0("geom_type_", slug)]] %||% "bg"
+        
+        validate(
+          need(
+            !is.null(if (selected_geom == "hex") res$hex_panel else res$bg_panel),
+            sprintf("Data is not available for %s under this spatial layer.", city_name)
+          )
+        )
+        
+        make_gi_map(res, geom_type = selected_geom)
+      })
+      
+      # Render Table
+      output[[paste0("hotspot_table_", slug)]] <- renderUI({
+        req(hotspot_results)
+        key <- paste(city_name, input$hotspot_scenario, sep = "_")
+        res <- hotspot_results[[key]]
+        req(res)
+        
+        selected_geom <- input[[paste0("geom_type_", slug)]] %||% "bg"
+        active_panel  <- if (selected_geom == "hex") res$hex_panel else res$bg_panel
+        
+        validate(
+          need(!is.null(active_panel), sprintf("Data is not available for %s under this spatial layer.", city_name))
+        )
+        
+        summary_df <- hotspot_summary_df(active_panel)
+        req(summary_df, nrow(summary_df) > 0)
+        
+        tagList(
+          tags$table(
+            class = "results-table",
+            tags$thead(
+              tags$tr(
+                tags$th("Cluster Type"),
+                tags$th("Count"),
+                tags$th("Share"),
+                tags$th("Pre Total"),
+                tags$th("Post Total"),
+                tags$th("Avg. Mo. Change (Own)"),
+                tags$th("Avg. Mo. Change (Neighborhood)")
+              )
+            ),
+            tags$tbody(
+              purrr::pmap(summary_df, function(significance, Count, Share, Pre_Total, Post_Total, Avg_Change, Avg_Local_Mean) {
+                tags$tr(
+                  tags$td(class = "cutoff-name", as.character(significance)),
+                  tags$td(scales::comma(Count)),
+                  tags$td(scales::percent(Share, accuracy = 0.1)),
+                  tags$td(scales::comma(Pre_Total)),
+                  tags$td(scales::comma(Post_Total)),
+                  tags$td(sprintf("%.2f", Avg_Change)),
+                  tags$td(sprintf("%.2f", Avg_Local_Mean))
+                )
+              })
+            )
+          )
+        )
+      })
+    })
+  })
 }
 # Run the app
 shinyApp(ui, server)
