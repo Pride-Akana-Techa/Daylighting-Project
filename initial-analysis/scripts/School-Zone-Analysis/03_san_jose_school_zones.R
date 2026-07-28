@@ -296,136 +296,78 @@ extract_rd <- function(model, zone_type, cutoff){
 
 
 # Build dataframe for school zone analysis
-school_zone_analysis <- bind_rows(
+school_zone_analysis <- bind_rows(extract_rd(in_school_zone_model,
+                                             "School Zone", "2024"),
+                                  extract_rd(in_school_zone1_model,
+                                             "School Zone", "2025"),
+                                  extract_rd(out_school_zone_model, 
+                                             "Non-School Zone", "2024"),
+                                  extract_rd(out_school_zone1_model,
+                                             "Non-School Zone", "2025")) |>
   
-  extract_rd(in_school_zone_model, 
-             "School Zone", 
-             "2024"),
-  
-  extract_rd(in_school_zone1_model, 
-             "School Zone", 
-             "2025"),
-  
-  extract_rd(out_school_zone_model, 
-             "Non-School Zone", 
-             "2024"),
-  
-  extract_rd(out_school_zone1_model, 
-             "Non-School Zone", 
-             "2025")
-  
-) |>
-  
-  mutate(
-    Zone = factor(
-      Zone,
-      levels = c("School Zone", "Non-School Zone")
-    ),
-    
-    Cutoff = factor(
-      Cutoff,
-      levels = c("2024", "2025")
-    ),
-    
-    Sig = case_when(
-      P_value < 0.01 ~ "***",
-      P_value < 0.05 ~ "**",
-      P_value < 0.10 ~ "*",
-      TRUE ~ ""
-    ),
-    
-    Label = round(Effect, 2)
-  )
+  mutate(Zone = factor(Zone,
+                       levels = c("School Zone", "Non-School Zone")),
+         Cutoff = factor(Cutoff,
+                         levels = c("2024", "2025")),
+         Sig = case_when(P_value < 0.01 ~ "***",
+                         P_value < 0.05 ~ "**",
+                         P_value < 0.10 ~ "*",
+                         TRUE ~ ""),
+         Label = round(Effect, 2))
 
 
 # Plot
-ggplot(
-  school_zone_analysis,
-  aes(Zone, Effect, fill = Cutoff)
-) +
+ggplot(school_zone_analysis,
+       aes(Zone, Effect, fill = Cutoff)) +
   
-  geom_col(
-    position = position_dodge(width = 0.6),
-    width = 0.55
-  ) +
+  geom_col(position = position_dodge(width = 0.6), width = 0.55) +
   
-  geom_text(
-    aes(
-      label = Label,
-      vjust = ifelse(Effect < 0, 1.15, -0.35),
-      color = ifelse(Sig != "" & !is.na(Sig), "#800000", "black"),
-      group = Cutoff
-    ),
-    position = position_dodge(width = 0.65),
-    fontface = "bold",
-    size = 4.5
-  ) +
+  geom_text(aes(label = Label,
+                vjust = ifelse(Effect < 0, 1.15, -0.35),
+                color = ifelse(Sig != "" & !is.na(Sig), "#800000", "black"),
+                group = Cutoff),
+            position = position_dodge(width = 0.65),
+            fontface = "bold",
+            size = 4.5) +
   
-  geom_text(
-    aes(
-      label = Sig,
-      y = ifelse(Effect < 0, Effect - 0.2, Effect + 0.2),
-      vjust = ifelse(Effect < 0, -1.5, 1.5),
-      hjust = ifelse(Effect < 0, -3.3, -1.0),
-      color = "#800000",
-      group = Cutoff
-    ),
-    position = position_dodge(width = 0.65),
-    size = 4,
-    fontface = "bold"
-  ) +
+  geom_text(aes(label = Sig,
+                y = ifelse(Effect < 0, Effect - 0.2, Effect + 0.2),
+                vjust = ifelse(Effect < 0, -1.5, 1.5),
+                hjust = ifelse(Effect < 0, -3.3, -1.0),
+                color = "#800000",
+                group = Cutoff),
+            position = position_dodge(width = 0.65),
+            size = 4,
+            fontface = "bold") +
   
   scale_color_identity() +
   
-  scale_x_discrete(
-    expand = expansion(mult = c(0.1,0.1))
-  ) +
+  scale_x_discrete(expand = expansion(mult = c(0.1,0.1))) +
   
-  geom_hline(
-    yintercept = 0,
-    linewidth = .5
-  ) +
+  geom_hline(yintercept = 0, linewidth = .5) +
   
-  scale_fill_manual(
-    values = sunflower
-  ) +
+  scale_fill_manual(values = sunflower) +
   
-  labs(
-    title = "San José School Zone Analysis",
-    subtitle = "Comparison of pedestrian crashes within and outside school zones",
-    x = NULL,
-    y = "RD Effect (Standardized by z-scores)",
-    fill = NULL,
-    caption = "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level"
-  ) +
+  labs(title = "San José School Zone Analysis",
+       subtitle = "Comparison of pedestrian crashes within and outside school zones",
+       x = NULL,
+       y = "RD Effect (Standardized by z-scores)",
+       fill = NULL,
+       caption = "* Significant at the 10% level; ** Significant at the 5% level; *** Significant at the 1% level") +
   
-  theme_minimal(
-    base_size = 14
-  ) +
+  theme_minimal(base_size = 14) +
   
-  theme(
-    legend.position = "bottom",
-    
-    plot.caption = element_text(
-      hjust = 0.5,
-      face = "italic",
-      size = 10,
-      color = "#800000"
-    ),
-    
-    axis.text.x = element_text(
-      face = "bold",
-      size = 13
-    ),
-    
-    plot.title = element_text(
-      face = "bold",
-      size = 17
-    ),
-    
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor = element_blank()
-  )
+  theme(legend.position = "bottom",
+        plot.caption = element_text(hjust = 0.5,
+                                    face = "italic",
+                                    size = 10,
+                                    color = "#800000"),
+        axis.text.x = element_text(face = "bold",
+                                   size = 13),
+        plot.title = element_text(face = "bold",
+                                  size = 17),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank())
 
 # Save
 ggsave(filename = "initial-analysis/figs/san_jose.png",
