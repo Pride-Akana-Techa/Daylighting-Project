@@ -149,12 +149,21 @@ app_theme <- bs_theme(
       font-weight: 600;
       text-align: right;
     }
-@media (max-width: 950px) {
-  .specimen-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 700px) {
+  .document-card img,
+  .document-card .shiny-plot-output,
+  .map-workspace-container .shiny-plot-output {
+    height: auto !important;
+    min-height: 320px;
   }
 }
-
+.document-card p {
+  margin-top: 0;
+  margin-bottom: 1em;   /* keep spacing between paragraphs */
+}
+.document-card p:last-child {
+  margin-bottom: 0;     /* kill the trailing gap */
+}
 .specimen-grid img {
   width: 100%;
   height: auto;
@@ -513,6 +522,20 @@ app_theme <- bs_theme(
   vertical-align: middle;
   border-right: 1px dashed var(--brand-border);
 }
+.results-table .results-table-group {
+  text-align: center;
+  border-bottom: 1px solid var(--brand-border);
+  border-left: 1px dashed var(--brand-border);
+  font-family: 'Playfair Display', serif;
+  color: var(--brand-navy);
+}
+.results-table thead tr:last-child th {
+  font-family: monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--brand-muted);
+  font-weight: 600;
+}
 
 .accordion-item {
   border: 1px solid var(--brand-border) !important;
@@ -533,6 +556,15 @@ app_theme <- bs_theme(
   box-shadow: none;
   border-color: var(--brand-border);
 }
+.table-scroll-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 16px;
+    }
+    .table-scroll-wrap .results-table,
+    .table-scroll-wrap .var-table {
+      min-width: 640px;
+    }
 
     @media (max-width: 950px) {
       .app-shell { flex-direction: column; }
@@ -914,7 +946,6 @@ hotspot_summary_df <- function(active_panel) {
   
   df <- active_panel |> sf::st_drop_geometry()
   levels_order <- levels(df$significance)
-  total_units <- nrow(df)
   has_nbr <- "neighbor_geoids" %in% names(df)
   
   df |>
@@ -924,7 +955,6 @@ hotspot_summary_df <- function(active_panel) {
       grp <- .x
       base <- data.frame(
         Count      = nrow(grp),
-        Share      = nrow(grp) / total_units,
         Pre_Total  = sum(grp$pre, na.rm = TRUE),
         Post_Total = sum(grp$post, na.rm = TRUE),
         Avg_Change = mean(grp$change_rate_mo, na.rm = TRUE),
@@ -1195,7 +1225,7 @@ placebo_plot <- ggplot(placebo_results,
 # Shared Input Component Layout
 # ==========================================================================
 filter_panel_register <- div(
-  div(class = "section-eyebrow", "crash filters"),
+  # div(class = "section-eyebrow", "crash filters"),
   div(
     class = "register-container",
     div(class = "register-header", span("Map & Graph Controls")),
@@ -1240,7 +1270,7 @@ overview_page <- div(
   layout_columns(
     col_widths = c(12),
     div(
-      h1(class = "page-title", "Impacts of California AB 413 \"Daylighting Law\" on Pedestrian and Bicyclist Safety")
+      h1(class = "page-title", "Impacts of California AB 413 \"Daylighting\" Law on Pedestrian and Bicyclist Safety")
     )
   ),
   layout_columns(
@@ -1382,7 +1412,7 @@ maps_page <- div(
     div(
       class = "filter-sticky-col",
       filter_panel_register <- div(
-        div(class = "section-eyebrow", "crash filters"),
+        # div(class = "section-eyebrow", "crash filters"),
         div(
           class = "register-container",
           div(class = "register-header", span("Map & Graph Controls")),
@@ -1414,7 +1444,7 @@ maps_page <- div(
           )
         )
       ),
-      div(class = "section-eyebrow", "aggregation filters"),
+      # div(class = "section-eyebrow", "aggregation filters"),
       div(
         class = "register-container",
         div(class = "register-header", span("Graph Controls")),
@@ -1469,7 +1499,7 @@ hotspot_city_section <- function(city_name, show_title = TRUE) {
         radioButtons(
           inputId  = paste0("geom_type_", slug),
           label    = NULL,
-          choices  = list("Block Groups" = "bg", "Census Tracts" = "tract", "Hexagons" = "hex"),
+          choices  = list("Block Groups" = "bg", "Census Tracts" = "tract", "Hexagons (1000ft)" = "hex"),
           selected = "bg",
           inline   = TRUE
         )
@@ -1503,8 +1533,11 @@ methodology_page <- div(
             style = "color: var(--brand-ink); line-height: 1.7;"
           ),
           div(
-            style = "padding: 16px 0; text-align: center; font-size: 1.05rem;",
-            "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
+            style = "padding: 16px 0; text-align: center; font-size: 1.05rem; overflow-x: auto; -webkit-overflow-scrolling: touch;",
+            div(
+              style = "display: inline-block; min-width: min-content;",
+              "$$Y_t = \\alpha + \\tau D_t + \\beta_1(t - t_0) + \\beta_2 D_t (t - t_0) + \\gamma \\, \\text{Season}_t + \\varepsilon_t, \\quad |t - t_0| \\le h$$"
+            )
           )
       ),
       
@@ -1512,7 +1545,7 @@ methodology_page <- div(
       div(class = "document-card-title", "Variable Definitions"),
       div(class = "document-card document-card--variable",
           div(
-            class = "var-table-wrap",
+            class = "var-table-wrap table-scroll-wrap",
             tags$table(
               class = "var-table",
               tags$thead(
@@ -1656,7 +1689,7 @@ methodology_page <- div(
       div(class = "document-card-title", "Variable Definitions"),
       div(class = "document-card document-card--variable",
           div(
-            class = "var-table-wrap",
+            class = "var-table-wrap table-scroll-wrap",
             tags$table(
               class = "var-table",
               tags$thead(
@@ -1820,8 +1853,8 @@ results_page <- div(
           span("Scenario"),
           radioButtons(
             inputId = "hotspot_scenario", label = NULL,
-            choices = list("Warning Phase (Jan 2024 baseline)" = "Warning_Date",
-                           "Enforcement Phase (city-specific)" = "Enforcement_Date"),
+            choices = list("Warning Phase (January 1st, 2024 start date)" = "Warning_Date",
+                           "Enforcement Phase (city specific start dates)" = "Enforcement_Date"),
             selected = "Enforcement_Date", inline = TRUE
           )
         )
@@ -2043,6 +2076,7 @@ ui <- page_fluid(
   tags$head(
     tags$title("California Assembly Bill 413: Daylighting Law"),
     tags$link(rel = "icon", href = "data:,"),
+    tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
     tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js")
   ),
   useShinyjs(),
@@ -2447,23 +2481,38 @@ server <- function(input, output, session) {
   # --- Results page: statewide RDiT plot and estimates table ---------------
   output$statewide_rd_plot <- renderPlot({
     statewide_rdit_plot
+  }, height = function() {
+    w <- session$clientData$output_statewide_rd_plot_width
+    if (is.null(w)) 360 else if (w < 500) 620 else 360
   })
   
   # city-level plot
   output$city_rd_plot <- renderPlot({
     city_rd_plot
+  }, height = function() {
+    w <- session$clientData$output_statewide_rd_plot_width
+    if (is.null(w)) 360 else if (w < 500) 620 else 360
   })
   
   output$city_rdit_san_diego <- renderPlot({
     city_rdit_plots[["San Diego"]]
+  }, height = function() {
+    w <- session$clientData$output_statewide_rd_plot_width
+    if (is.null(w)) 360 else if (w < 500) 620 else 360
   })
   
   output$city_rdit_san_francisco <- renderPlot({
     city_rdit_plots[["San Francisco"]]
+  }, height = function() {
+    w <- session$clientData$output_statewide_rd_plot_width
+    if (is.null(w)) 360 else if (w < 500) 620 else 360
   })
   
   output$city_rdit_la <- renderPlot({
     city_rdit_plots[["Los Angeles"]]
+  }, height = function() {
+    w <- session$clientData$output_statewide_rd_plot_width
+    if (is.null(w)) 360 else if (w < 500) 620 else 360
   })
   
   output$statewide_results_table <- renderUI({
@@ -2484,31 +2533,34 @@ server <- function(input, output, session) {
     }
     
     tagList(
-      tags$table(
-        class = "results-table",
-        tags$thead(
-          tags$tr(
-            tags$th("Cutoff"),
-            tags$th("Estimate"),
-            tags$th("p-value"),
-            tags$th("Std. Error"),
-            tags$th("95% CI")
-          )
-        ),
-        tags$tbody(
-          purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
-            stars <- sig_stars(`p-value`)
+      div(
+        class = "table-scroll-wrap",
+        tags$table(
+          class = "results-table",
+          tags$thead(
             tags$tr(
-              tags$td(class = "cutoff-name", Cutoff),
-              tags$td(
-                sprintf("%.3f", Estimate),
-                if (stars != "") tags$span(class = "sig-stars", stars)
-              ),
-              tags$td(sprintf("%.3f", `p-value`)),
-              tags$td(sprintf("%.3f", `Std. Error`)),
-              tags$td(sprintf("[%.3f, %.3f]", CI_lower, CI_upper))
+              tags$th("Cutoff"),
+              tags$th("Estimate"),
+              tags$th("p-value"),
+              tags$th("Std. Error"),
+              tags$th("95% CI")
             )
-          })
+          ),
+          tags$tbody(
+            purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
+              stars <- sig_stars(`p-value`)
+              tags$tr(
+                tags$td(class = "cutoff-name", Cutoff),
+                tags$td(
+                  sprintf("%.3f", Estimate),
+                  if (stars != "") tags$span(class = "sig-stars", stars)
+                ),
+                tags$td(sprintf("%.3f", `p-value`)),
+                tags$td(sprintf("%.3f", `Std. Error`)),
+                tags$td(sprintf("[%.3f, %.3f]", CI_lower, CI_upper))
+              )
+            })
+          )
         )
       ),
       tags$p(
@@ -2537,31 +2589,34 @@ server <- function(input, output, session) {
     }
     
     tagList(
-      tags$table(
-        class = "results-table",
-        tags$thead(
-          tags$tr(
-            tags$th("Cutoff"),
-            tags$th("Estimate"),
-            tags$th("p-value"),
-            tags$th("Std. Error"),
-            tags$th("95% CI")
-          )
-        ),
-        tags$tbody(
-          purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
-            stars <- sig_stars(`p-value`)
+      div(
+        class = "table-scroll-wrap",
+        tags$table(
+          class = "results-table",
+          tags$thead(
             tags$tr(
-              tags$td(class = "cutoff-name", Cutoff),
-              tags$td(
-                sprintf("%.3f", Estimate),
-                if (stars != "") tags$span(class = "sig-stars", stars)
-              ),
-              tags$td(sprintf("%.3f", `p-value`)),
-              tags$td(sprintf("%.3f", `Std. Error`)),
-              tags$td(sprintf("[%.3f, %.3f]", CI_lower, CI_upper))
+              tags$th("Cutoff"),
+              tags$th("Estimate"),
+              tags$th("p-value"),
+              tags$th("Std. Error"),
+              tags$th("95% CI")
             )
-          })
+          ),
+          tags$tbody(
+            purrr::pmap(results_df, function(Cutoff, Estimate, `Std. Error`, CI_lower, CI_upper, `p-value`) {
+              stars <- sig_stars(`p-value`)
+              tags$tr(
+                tags$td(class = "cutoff-name", Cutoff),
+                tags$td(
+                  sprintf("%.3f", Estimate),
+                  if (stars != "") tags$span(class = "sig-stars", stars)
+                ),
+                tags$td(sprintf("%.3f", `p-value`)),
+                tags$td(sprintf("%.3f", `Std. Error`)),
+                tags$td(sprintf("[%.3f, %.3f]", CI_lower, CI_upper))
+              )
+            })
+          )
         )
       ),
       tags$p(
@@ -2596,7 +2651,6 @@ server <- function(input, output, session) {
       else ""
     }
     
-    # rowspan counts for Category and Subcategory groups
     cat_spans    <- het_df %>% dplyr::count(Category, name = "n")
     subcat_spans <- het_df %>% dplyr::count(Category, Subcategory, name = "n")
     
@@ -2609,7 +2663,7 @@ server <- function(input, output, session) {
       stars <- sig_stars(row$pval)
       
       cat_cell <- if (!(row$Category %in% cat_seen)) {
-        cat_seen <- c(cat_seen, row$Category)   # was <<-
+        cat_seen <- c(cat_seen, row$Category)
         tags$td(
           class = "group-cell",
           rowspan = cat_spans$n[cat_spans$Category == row$Category],
@@ -2619,7 +2673,7 @@ server <- function(input, output, session) {
       
       subcat_key <- paste(row$Category, row$Subcategory)
       subcat_cell <- if (!(subcat_key %in% subcat_seen)) {
-        subcat_seen <- c(subcat_seen, subcat_key)   # was <<-
+        subcat_seen <- c(subcat_seen, subcat_key)
         tags$td(
           class = "subgroup-cell",
           rowspan = subcat_spans$n[subcat_spans$Category == row$Category & subcat_spans$Subcategory == row$Subcategory],
@@ -2642,20 +2696,23 @@ server <- function(input, output, session) {
     }
     
     tagList(
-      tags$table(
-        class = "results-table",
-        tags$thead(
-          tags$tr(
-            tags$th("Category"),
-            tags$th("Sub-category"),
-            tags$th("Cutoff"),
-            tags$th("Estimate"),
-            tags$th("p-value"),
-            tags$th("Std. Error"),
-            tags$th("95% CI")
-          )
-        ),
-        tags$tbody(rows)
+      div(
+        class = "table-scroll-wrap",
+        tags$table(
+          class = "results-table",
+          tags$thead(
+            tags$tr(
+              tags$th("Category"),
+              tags$th("Sub-category"),
+              tags$th("Cutoff"),
+              tags$th("Estimate"),
+              tags$th("p-value"),
+              tags$th("Std. Error"),
+              tags$th("95% CI")
+            )
+          ),
+          tags$tbody(rows)
+        )
       ),
       tags$p(
         class = "results-table-note",
@@ -2721,19 +2778,22 @@ server <- function(input, output, session) {
     }
     
     tagList(
-      tags$table(
-        class = "results-table",
-        tags$thead(
-          tags$tr(
-            tags$th("Cutoff"),
-            tags$th("Bandwidth"),
-            tags$th("Estimate"),
-            tags$th("p-value"),
-            tags$th("Std. Error"),
-            tags$th("95% CI")
-          )
-        ),
-        tags$tbody(rows)
+      div(
+        class = "table-scroll-wrap",
+        tags$table(
+          class = "results-table",
+          tags$thead(
+            tags$tr(
+              tags$th("Cutoff"),
+              tags$th("Bandwidth"),
+              tags$th("Estimate"),
+              tags$th("p-value"),
+              tags$th("Std. Error"),
+              tags$th("95% CI")
+            )
+          ),
+          tags$tbody(rows)
+        )
       ),
       tags$p(
         class = "results-table-note",
@@ -2770,75 +2830,75 @@ server <- function(input, output, session) {
     }
     
     tagList(
-      
-      tags$table(
-        class = "results-table",
-        
-        tags$thead(
-          tags$tr(
-            tags$th("Covariate"),
-            tags$th("Cutoff"),
-            tags$th("Estimate"),
-            tags$th("p-value"),
-            tags$th("Std. Error"),
-            tags$th("95% CI")
+      div(
+        class = "table-scroll-wrap",
+        tags$table(
+          class = "results-table",
+          
+          tags$thead(
+            tags$tr(
+              tags$th("Covariate"),
+              tags$th("Cutoff"),
+              tags$th("Estimate"),
+              tags$th("p-value"),
+              tags$th("Std. Error"),
+              tags$th("95% CI")
+            )
+          ),
+          
+          tags$tbody(
+            
+            tags$tr(
+              tags$td(class = "group-cell",
+                      rowspan = 2,
+                      "Temperature"),
+              tags$td(class = "cutoff-name", "January 2024"),
+              tags$td(
+                sprintf("%.3f", -3.324),
+                tags$span(class = "sig-stars", sig_stars(0.949))
+              ),
+              tags$td(sprintf("%.3f", 0.949)),
+              tags$td(sprintf("%.3f", 4.986)),
+              tags$td(sprintf("[%.3f, %.3f]", -9.455, 10.089))
+            ),
+            
+            tags$tr(
+              tags$td(class = "cutoff-name", "January 2025"),
+              tags$td(
+                sprintf("%.3f", -0.913),
+                tags$span(class = "sig-stars", sig_stars(0.402))
+              ),
+              tags$td(sprintf("%.3f", 0.402)),
+              tags$td(sprintf("%.3f", 7.257)),
+              tags$td(sprintf("[%.3f, %.3f]", -8.143, 20.303))
+            ),
+            
+            tags$tr(
+              tags$td(class = "group-cell",
+                      rowspan = 2,
+                      "Precipitation"),
+              tags$td(class = "cutoff-name", "January 2024"),
+              tags$td(
+                sprintf("%.3f", 2.440),
+                tags$span(class = "sig-stars", sig_stars(0.108))
+              ),
+              tags$td(sprintf("%.3f", 0.108)),
+              tags$td(sprintf("%.3f", 1.416)),
+              tags$td(sprintf("[%.3f, %.3f]", -0.497, 5.053))
+            ),
+            
+            tags$tr(
+              tags$td(class = "cutoff-name", "January 2025"),
+              tags$td(
+                sprintf("%.3f", -1.520),
+                tags$span(class = "sig-stars", sig_stars(0.258))
+              ),
+              tags$td(sprintf("%.3f", 0.258)),
+              tags$td(sprintf("%.3f", 2.935)),
+              tags$td(sprintf("[%.3f, %.3f]", -9.070, 2.435))
+            )
+            
           )
-        ),
-        
-        tags$tbody(
-          
-          # Temperature
-          tags$tr(
-            tags$td(class = "group-cell",
-                    rowspan = 2,
-                    "Temperature"),
-            tags$td(class = "cutoff-name", "January 2024"),
-            tags$td(
-              sprintf("%.3f", -3.324),
-              tags$span(class = "sig-stars", sig_stars(0.949))
-            ),
-            tags$td(sprintf("%.3f", 0.949)),
-            tags$td(sprintf("%.3f", 4.986)),
-            tags$td(sprintf("[%.3f, %.3f]", -9.455, 10.089))
-          ),
-          
-          tags$tr(
-            tags$td(class = "cutoff-name", "January 2025"),
-            tags$td(
-              sprintf("%.3f", -0.913),
-              tags$span(class = "sig-stars", sig_stars(0.402))
-            ),
-            tags$td(sprintf("%.3f", 0.402)),
-            tags$td(sprintf("%.3f", 7.257)),
-            tags$td(sprintf("[%.3f, %.3f]", -8.143, 20.303))
-          ),
-          
-          # Precipitation
-          tags$tr(
-            tags$td(class = "group-cell",
-                    rowspan = 2,
-                    "Precipitation"),
-            tags$td(class = "cutoff-name", "January 2024"),
-            tags$td(
-              sprintf("%.3f", 2.440),
-              tags$span(class = "sig-stars", sig_stars(0.108))
-            ),
-            tags$td(sprintf("%.3f", 0.108)),
-            tags$td(sprintf("%.3f", 1.416)),
-            tags$td(sprintf("[%.3f, %.3f]", -0.497, 5.053))
-          ),
-          
-          tags$tr(
-            tags$td(class = "cutoff-name", "January 2025"),
-            tags$td(
-              sprintf("%.3f", -1.520),
-              tags$span(class = "sig-stars", sig_stars(0.258))
-            ),
-            tags$td(sprintf("%.3f", 0.258)),
-            tags$td(sprintf("%.3f", 2.935)),
-            tags$td(sprintf("[%.3f, %.3f]", -9.070, 2.435))
-          )
-          
         )
       ),
       
@@ -2858,13 +2918,18 @@ server <- function(input, output, session) {
   
   # --- Hot & Cold Spot Analysis: per-city map + summary table ---------------
   hotspot_cities <- c("Los Angeles", "San Diego", "San Francisco")
+  format_change_cell <- function(x) {
+    if (is.na(x)) return(tags$td("—"))
+    tags$td(sprintf("%+.2f", x))
+  }
+    
+  
   
   lapply(hotspot_cities, function(city_name) {
     local({
       city_name <- city_name
       slug <- gsub(" ", "_", tolower(city_name))
       
-      # Render Map
       output[[paste0("hotspot_map_", slug)]] <- renderPlot({
         req(hotspot_results)
         key <- paste(city_name, input$hotspot_scenario, sep = "_")
@@ -2872,18 +2937,11 @@ server <- function(input, output, session) {
         req(res)
         
         selected_geom <- input[[paste0("geom_type_", slug)]] %||% "bg"
-        
-        validate(
-          need(
-            !is.null(if (selected_geom == "hex") res$hex_panel else res$bg_panel),
-            sprintf("Data is not available for %s under this spatial layer.", city_name)
-          )
-        )
-        
-        make_gi_map(res, geom_type = selected_geom)
+        p <- make_gi_map(res, geom_type = selected_geom)
+        validate(need(!is.null(p), sprintf("Data is not available for %s under this spatial layer.", city_name)))
+        p
       })
-      
-      # Render Table
+      # Render Map
       output[[paste0("hotspot_table_", slug)]] <- renderUI({
         req(hotspot_results)
         key <- paste(city_name, input$hotspot_scenario, sep = "_")
@@ -2894,54 +2952,66 @@ server <- function(input, output, session) {
         active_panel  <- switch(selected_geom,
                                 "hex"   = res$hex_panel,
                                 "tract" = res$tract_panel,
-                                res$bg_panel
-        )        
-        validate(
-          need(!is.null(active_panel), sprintf("Data is not available for %s under this spatial layer.", city_name))
-        )
+                                res$bg_panel)
+        validate(need(!is.null(active_panel), sprintf("Data is not available for %s under this spatial layer.", city_name)))
         
         summary_df <- hotspot_summary_df(active_panel)
         req(summary_df, nrow(summary_df) > 0)
         
+        # Derive a human-readable unit name and its plural from the selected geometry
+        unit_label   <- switch(selected_geom,
+                               "hex"   = "Hexagon",
+                               "tract" = "Census Tract",
+                               "Block Group")
+        unit_label_pl <- switch(selected_geom,
+                                "hex"   = "Hexagons",
+                                "tract" = "Census Tracts",
+                                "Block Groups")
+        
         tagList(
-          tags$table(
-            class = "results-table",
-            tags$thead(
-              tags$tr(
-                tags$th("Cluster Type"),
-                tags$th("Count"),
-                tags$th("Share"),
-                tags$th("Pre Total"),
-                tags$th("Post Total"),
-                tags$th("Pre Total (Neighborhood)"),
-                tags$th("Post Total (Neighborhood)"),
-                tags$th("Avg. Mo. Change (Own)"),
-                tags$th("Avg. Mo. Change (Neighborhood)")
-              )
-            ),
-            tags$tbody(
-              purrr::pmap(summary_df, function(significance, Count, Share, Pre_Total, Post_Total,
-                                               Pre_Neighbor_Total, Post_Neighbor_Total,
-                                               Avg_Change, Avg_Local_Mean) {
-                sig_color <- hot_cold_colors[[as.character(significance)]]
-                row_bg    <- scales::alpha(sig_color, 0.16)
+          div(
+            class = "table-scroll-wrap",
+            tags$table(
+              class = "results-table",
+              tags$thead(
                 tags$tr(
-                  style = sprintf("background-color: %s;", row_bg),
-                  tags$td(
-                    class = "cutoff-name",
-                    style = sprintf("color: %s; font-weight: 700; border-left: 5px solid %s; padding-left: 12px;", sig_color, sig_color),
-                    as.character(significance)
-                  ),
-                  tags$td(scales::comma(Count)),
-                  tags$td(scales::percent(Share, accuracy = 0.1)),
-                  tags$td(scales::comma(Pre_Total)),
-                  tags$td(scales::comma(Post_Total)),
-                  tags$td(scales::comma(Pre_Neighbor_Total)),
-                  tags$td(scales::comma(Post_Neighbor_Total)),
-                  tags$td(sprintf("%.2f", Avg_Change)),
-                  tags$td(sprintf("%.2f", Avg_Local_Mean))
+                  tags$th(rowspan = 2, class = "results-table-group", "Cluster Type"),
+                  tags$th(rowspan = 2, class = "results-table-group", sprintf("# %ss", unit_label)),
+                  tags$th(colspan = 3, class = "results-table-group",
+                          title = sprintf("Crash counts within the %s itself", tolower(unit_label)),
+                          "Number of Crashes: This", unit_label),
+                  tags$th(colspan = 3, class = "results-table-group",
+                          title = sprintf("Crash counts summed across all clustered %s", unit_label_pl),
+                          sprintf("All Clustered %s", unit_label_pl))
+                ),
+                tags$tr(
+                  tags$th("Before"), tags$th("After"), tags$th("Avg. Change/mo"),
+                  tags$th("Before"), tags$th("After"), tags$th("Avg. Change/mo")
                 )
-              })
+              ),
+              tags$tbody(
+                purrr::pmap(summary_df, function(significance, Count, Pre_Total, Post_Total,
+                                                 Pre_Neighbor_Total, Post_Neighbor_Total,
+                                                 Avg_Change, Avg_Local_Mean) {
+                  sig_color <- hot_cold_colors[[as.character(significance)]]
+                  row_bg    <- scales::alpha(sig_color, 0.16)
+                  tags$tr(
+                    style = sprintf("background-color: %s;", row_bg),
+                    tags$td(
+                      class = "cutoff-name",
+                      style = sprintf("color: %s; font-weight: 700; border-left: 5px solid %s; padding-left: 12px;", sig_color, sig_color),
+                      as.character(significance)
+                    ),
+                    tags$td(scales::comma(Count)),
+                    tags$td(scales::comma(Pre_Total)),
+                    tags$td(scales::comma(Post_Total)),
+                    format_change_cell(Avg_Change),
+                    tags$td(scales::comma(Pre_Neighbor_Total)),
+                    tags$td(scales::comma(Post_Neighbor_Total)),
+                    format_change_cell(Avg_Local_Mean)
+                  )
+                })
+              )
             )
           )
         )
