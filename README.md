@@ -97,7 +97,11 @@ $$Y_t = \alpha + \tau D_t + \beta_1(t - t_0) + \beta_2 D_t (t - t_0) + \gamma \,
 
 #### Weather RDiT
 
-**Script:** `scripts/Weather-Analysis/02_NOAA_RDiT.R` - Tests the continuity of weather conditions (precipitation and temperature) at January 2024 and January 2025. - Rules out seasonal weather change as a confound for the main result. - Output: `figs/XXX`
+**Script:** `scripts/Weather-Analysis/02_NOAA_RDiT.R`
+
+- Tests the continuity of weather conditions (precipitation and temperature) at January 2024 and January 2025.
+- Rules out seasonal weather change as a confound for the main result.
+- Output: `figs/XXX`
 
 #### Heterogeneity Analysis
 
@@ -132,7 +136,7 @@ Output: `figs/XXX`
 
 ------------------------------------------------------------------------
 
-## How to Reproduce {#how-to-reproduce}
+## How to Reproduce
 
 Open `Daylighting-Project.Rproj` in RStudio first (ensures `here::here()` paths work), then run `Master.R`:
 
@@ -142,7 +146,7 @@ source("Master.R")
 
 ------------------------------------------------------------------------
 
-## Dependencies {#dependencies}
+## Dependencies
 
 ``` r
 install.packages(c(
@@ -161,7 +165,7 @@ Tested on R 4.4.x.
 
 ------------------------------------------------------------------------
 
-## Contact {#contact}
+## Contact
 
 | Name | Institution | Email |
 |------------------------|------------------------|------------------------|
