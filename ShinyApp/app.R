@@ -1549,7 +1549,7 @@ methodology_page <- div(
                   tags$td(class = "var-role", "Control")
                 ),
                 tags$tr(
-                  tags$td(class = "var-name", "Season_t"),
+                  tags$td(class = "var-name", HTML("Season<sub>t</sub>")),
                   tags$td("Categorical control for season, capturing seasonal variation in crash frequency."),
                   tags$td(class = "var-role", "Control")
                 ),
@@ -1915,9 +1915,9 @@ results_page <- div(
 
 # About Us Tab #
 # Helper for a picture placeholder + caption, reusable across all bio sections
-team_member_card <- function(name, description, img_src = NULL) {
+team_member_card <- function(name, description, university, img_src = NULL) {
   tags$div(
-    style = "display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 260px;",
+    style = "display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 360px;",
     tags$div(
       style = "width: 200px; height: 200px; border-radius: 50%; background-color: var(--brand-highlight); border: 2px solid var(--brand-border); display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 16px;",
       if (!is.null(img_src)) {
@@ -1937,8 +1937,12 @@ team_member_card <- function(name, description, img_src = NULL) {
       style = "font-family: monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brand-accent); margin-bottom: 8px;"
     ),
     tags$p(
-      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6;",
+      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6; margin: 0 0 4px 0;",
       description
+    ),
+    tags$p(
+      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6; margin: 0;",
+      university
     )
   )
 }
@@ -1969,12 +1973,14 @@ about_page <- div(
     team_member_card(
       img_src = "kyle.JPG",
       name = "Kyle Klemba",
-      description = "Data Science & Economics, William & Mary"
+      description = "Data Science & Economics",
+      university = "William & Mary"
     ),
     team_member_card(
       img_src = "pride.JPG",
       name = "Pride Akana Techa",
-      description = "Computer Science & Mathematics, Berea College"
+      description = "Computer Science & Mathematics",
+      university = "Berea College"
     )
   ),
   
@@ -1987,8 +1993,9 @@ about_page <- div(
     style = "display: flex; justify-content: center; padding: 32px 28px;",
     team_member_card(
       img_src = "yuanyuan.JPG",
-      name = "Yuanyuan Wen",
-      description = "Department of Agricultural and Applied Economics, Virginia Tech"
+      name = "Yuanyuan Wen, PhD Candidate",
+      description = "Department of Agricultural and Applied Economics",
+      university = "Virginia Tech"
     )
   ),
   
@@ -2002,12 +2009,14 @@ about_page <- div(
     team_member_card(
       img_src = "drgao.png",
       name = "Yujuan Gao, PhD",
-      description =  "Department of Agricultural and Applied Economics, Virginia Tech"
+      description =  "Department of Agricultural and Applied Economics",
+      university = "Virginia Tech"
     ),
     team_member_card(
       img_src = "drcary.jpg",
       name = "Michael Cary, PhD",
-      description = "Department of Agricultural and Applied Economics, Virginia Tech"
+      description = "Department of Agricultural and Applied Economics",
+      university = "Virginia Tech"
     )
   ),
   # ======================================================
