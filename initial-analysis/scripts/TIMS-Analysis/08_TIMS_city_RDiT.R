@@ -12,8 +12,7 @@
 library(tidyverse)
 library(rdrobust)
 
-tims_crashes <- readRDS("initial-analysis/data/TIMS_Filtered.rds") 
-
+tims_crashes <- readRDS("initial-analysis/data-clean/01_TIMS_Cleaned.rds") 
 
 
 # San Diego --------------------------------------------------------------
@@ -47,6 +46,11 @@ san_diego_model <- rdrobust(y = san_diego$Total_crashes,
 
 summary(san_diego_model)
 
+# Ajust for seasonality
+san_diego_season <- lm(Total_crashes ~ Season_factor,
+                        data = san_diego)
+
+san_diego$Crash_adj <- resid(san_diego_season) + mean(san_diego$Total_crashes)
 
 
 ## March 2025 Cutoff ##
@@ -80,10 +84,10 @@ summary(san_diego1_model)
 
 
 # Ajust for seasonality
-san_diego_season <- lm(Total_crashes ~ Season_factor,
-                    data = san_diego)
+san_diego1_season <- lm(Total_crashes ~ Season_factor,
+                    data = san_diego1)
 
-san_diego$Crash_adj <- resid(san_diego_season) + mean(san_diego$Total_crashes)
+san_diego1$Crash_adj <- resid(san_diego1_season) + mean(san_diego1$Total_crashes)
 
 
 # Combined plots
@@ -265,14 +269,14 @@ xseq_left  <- seq(-12, 0, length.out = 100)
 xseq_right <- seq(0, 12, length.out = 100)
 
 ci_2024 <- bind_rows(
-  make_ci_band(la, "Crash_adj", function(t) t < 0, xseq_left),
-  make_ci_band(la, "Crash_adj", function(t) t >= 0, xseq_right)
+  make_ci_band(san_francisco, "Crash_adj", function(t) t < 0, xseq_left),
+  make_ci_band(san_francisco, "Crash_adj", function(t) t >= 0, xseq_right)
 ) |> mutate(Date = as.Date("2024-01-01") + Time * 30.4368,
             Model = "Jan 2024 Cutoff")
 
 ci_2025 <- bind_rows(
-  make_ci_band(la1, "Crash_adj", function(t) t < 0, xseq_left),
-  make_ci_band(la1, "Crash_adj", function(t) t >= 0, xseq_right)
+  make_ci_band(san_francisco1, "Crash_adj", function(t) t < 0, xseq_left),
+  make_ci_band(san_francisco1, "Crash_adj", function(t) t >= 0, xseq_right)
 ) |> mutate(Date = as.Date("2025-01-01") + Time * 30.4368,
             Model = "Jan 2025 Cutoff")
 
