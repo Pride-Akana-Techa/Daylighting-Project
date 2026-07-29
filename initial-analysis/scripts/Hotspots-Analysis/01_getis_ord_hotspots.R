@@ -1,5 +1,5 @@
 ## ============================================================
-## Getis-Ord Gi* on pre/post crash change (Block Group + Hexagons)
+## Getis-Ord Gi* on pre/post crash change 
 ## ============================================================
 #### libraries #### 
 library(sf)
@@ -12,7 +12,11 @@ library(spdep)
 library(tidycensus)
 library(ggplot2)
 library(lubridate)
+library(ggspatial)
+library(prettymapr)
+library(purrr)
 
+options(ggspatial.caching = TRUE)
 options(tigris_use_cache = TRUE)
 tigris_cache_dir <- here::here("data-clean", ".tigris_cache")
 dir.create(tigris_cache_dir, showWarnings = FALSE, recursive = TRUE)
@@ -217,7 +221,7 @@ process_city_scenario <- function(city_name, scenario_row, city_boundary, bg_all
   tract_city <- tract_city[as.numeric(st_area(tract_city)) > 1000, ]
   
   hex_cellsize_ft <- 1000
-  hex_cellsize_m  <- hex_cellsize_ft * 0.3048  # 152.4
+  hex_cellsize_m  <- hex_cellsize_ft * 0.3048  
   
   hex_grid <- st_make_grid(city_boundary, cellsize = hex_cellsize_m, square = FALSE) |>
     st_as_sf() |> 
@@ -267,44 +271,112 @@ saveRDS(results, here("initial-analysis", "data-clean", "gi_results_by_city_scen
 saveRDS(results, here("ShinyApp", "shiny-data", "gi_results_by_city_scenarios.rds"))
 
 
-make_gi_map <- function(city_result, base_size = 14) {
-  if (is.null(city_result)) return(NULL)
+city_labels_raw <- tibble::tribble(
+  ~city,           ~label,             ~lon,       ~lat,
+  # San Diego
+  "San Diego",     "Downtown",          -117.1611, 32.7157,
+  "San Diego",     "La Jolla",          -117.2713, 32.8328,
+  "San Diego",     "Mission Valley",    -117.1511, 32.7667,
+  "San Diego",     "Pacific Beach",     -117.2359, 32.7998,
+  "San Diego",     "Hillcrest",         -117.1611, 32.7483,
+  "San Diego",     "Point Loma",        -117.2414, 32.7338,
+  "San Diego",     "Ocean Beach",       -117.2513, 32.7492,
+  "San Diego",     "Clairemont",        -117.1928, 32.8300,
+  "San Diego",     "Mission Beach",     -117.2517, 32.7703,
   
-  bg_data <- city_result$bg_panel
+  # Los Angeles
+  "Los Angeles",   "Downtown LA",       -118.2437, 34.0522,
+  "Los Angeles",   "Hollywood",         -118.3287, 34.0928,
+  "Los Angeles",   "Venice",            -118.4695, 33.9850,
+  "Los Angeles",   "Koreatown",         -118.3000, 34.0600,
+  "Los Angeles",   "Echo Park",         -118.2606, 34.0781,
+  "Los Angeles",   "Los Feliz",         -118.2903, 34.1073,
+  "Los Angeles",   "Sherman Oaks",      -118.4489, 34.1509,
+  "Los Angeles",   "Boyle Heights",     -118.2059, 34.0392,
+  "Los Angeles",   "San Pedro",         -118.2923, 33.7361,
+  
+  # San Francisco
+  "San Francisco", "SOMA",              -122.4000, 37.7800,
+  "San Francisco", "Mission",           -122.4180, 37.7600,
+  "San Francisco", "Sunset",            -122.4800, 37.7500,
+  "San Francisco", "Richmond",          -122.4800, 37.7800,
+  "San Francisco", "Nob Hill",          -122.4161, 37.7930,
+  "San Francisco", "Castro",            -122.4350, 37.7609,
+  "San Francisco", "Haight-Ashbury",    -122.4469, 37.7692,
+  "San Francisco", "Marina District",   -122.4373, 37.8037,
+  "San Francisco", "Bernal Heights",    -122.4157, 37.7440,
+) |>
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) |>
+  st_transform(target_crs)
+
+# Define color palette 
+hot_cold_colors <- c(
+  "Hot Spot (99% Conf.)"  = "#d73027",
+  "Hot Spot (95% Conf.)"  = "#f46d43",
+  "Hot Spot (90% Conf.)"  = "#fdae61",
+  "Cold Spot (90% Conf.)" = "#abd9e9",
+  "Cold Spot (95% Conf.)" = "#74add1",
+  "Cold Spot (99% Conf.)" = "#4575b4"
+)
+
+make_gi_map <- function(city_result,
+                        level = c("bg", "tract", "hex"),
+                        base_size = 14) {
+  
+  level <- match.arg(level)
+  
+  map_data <- switch(
+    level,
+    bg    = city_result$bg_panel,
+    tract = city_result$tract_panel,
+    hex   = city_result$hex_panel
+  )
+  
   city_boundary <- city_result$city_boundary
+  city_lab <- unique(map_data$city)
+  scen_lab <- unique(map_data$scenario)
+  months_lab <- unique(map_data$window_months)
   
-  city_lab <- unique(bg_data$city)
-  scen_lab <- unique(bg_data$scenario)
-  months_lab <- unique(bg_data$window_months)
+  k <- switch(
+    level,
+    bg    = city_result$bg_k,
+    tract = city_result$tract_k,
+    hex   = city_result$hex_k
+  )
   
-  
+  city_points <- city_labels_raw[city_labels_raw$city == city_lab, ]
+  city_points <- city_points[st_intersects(city_points, city_boundary, sparse = FALSE)[, 1], ]
   
   title_text <- sprintf("%s (%s)", city_lab, gsub("_", " ", scen_lab))
-  subtitle_text <- sprintf("Gi* Change in Crashes Per Month (%.f-Month Window | Optimal k = %d)", 
-                           
-                           months_lab, city_result$k)
+  subtitle_text <- sprintf("Gi* Change in Crashes Per Month (%.f-Month Window | Optimal k = %d)",
+                           months_lab, k)
   
   ggplot() +
     geom_sf(data = city_boundary, fill = "#F5F5F5", color = NA) +
-    
     geom_sf(
-      data = bg_data, 
-      aes(fill = significance), 
-      color = "darkgrey", 
+      data = map_data,
+      aes(fill = significance),
+      color = "darkgrey",
       linewidth = 0.1,
       show.legend = TRUE
     ) +
-    
     geom_sf(data = city_boundary, fill = NA, color = "#222222", linewidth = 0.6) +
-    
+    geom_sf_text(
+      data = city_points,
+      aes(label = label),
+      size = 2.8,
+      fontface = "bold",
+      color = "black",
+      check_overlap = TRUE
+    ) +
     scale_fill_manual(
       values = hot_cold_colors,
-      na.value = "white",                 
-      na.translate = FALSE,               
-      drop = FALSE,                       
+      na.value = "white",
+      na.translate = FALSE,
+      drop = FALSE,
       name = "Confidence"
     ) +
-    coord_sf(datum = NA) + 
+    coord_sf(datum = NA) +
     theme_minimal(base_size = base_size, base_family = "Helvetica") +
     labs(
       title = title_text,
@@ -320,7 +392,6 @@ make_gi_map <- function(city_result, base_size = 14) {
       panel.grid = element_blank(),
       plot.margin = margin(10, 10, 10, 10)
     ) +
-    
     guides(
       fill = guide_legend(
         override.aes = list(
@@ -330,20 +401,28 @@ make_gi_map <- function(city_result, base_size = 14) {
     )
 }
 
-purrr::walk(names(results), function(res_key) {
-  res_data <- results[[res_key]]
-  if (is.null(res_data)) return(NULL)
-  
-  p_map <- make_gi_map(res_data, base_size = 14)
-  out_filename <- file.path(out_dir, sprintf("gi_map_%s.jpg", res_key))
-  
-  ggsave(
-    filename = out_filename,
-    plot = p_map,
-    width = 10,
-    height = 10,
-    units = "in",
-    dpi = 300
-  )
-}) 
+levels <- c("bg", "tract", "hex")
 
+purrr::walk(names(results), function(res_key) {
+
+  res_data <- results[[res_key]]
+
+  purrr::walk(levels, function(level) {
+
+    p <- make_gi_map(res_data, level = level)
+
+    ggsave(
+      filename = file.path(
+        out_dir,
+        sprintf("gi_map_%s_%s.jpg", level, res_key)
+      ),
+      plot = p,
+      width = 10,
+      height = 10,
+      units = "in",
+      dpi = 300
+    )
+
+  })
+
+})
