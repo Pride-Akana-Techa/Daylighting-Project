@@ -610,7 +610,7 @@ includeHTML("www/literature_review.html")
 # RDiT Model Fitting 
 # ==========================================================================
 
-tims_crashes <- readRDS("shiny-data/TIMS_Filtered.rds")
+tims_crashes <- readRDS("shiny-data/tims_filtered2.rds")
 
 ## Jan 2024 cut-off(4-year span)
 rdit_data2 <- tims_crashes |> 
@@ -1297,7 +1297,7 @@ overview_page <- div(
       div(class = "document-card",
           p(
             p(
-              "This project evaluates the impact of AB 413 on pedestrian and bicyclist safety outcomes across California using statewide crash data and advanced statistical methods. The analysis examines changes in crash patterns before and after implementation of the law, while accounting for seasonal trends, roadway characteristics, weather conditions, lighting conditions, and differences across communities. In addition to measuring the overall effect of the policy, this project explores whether impacts vary by factors such as crash severity and local implementation strategies."
+              "This project evaluates the impact of AB 413 on pedestrian and bicyclist safety outcomes across California using statewide crash data and advanced statistical methods. The analysis examines changes in crash patterns before and after implementation of the law, while accounting for seasonal trends, weather conditions, lighting conditions, and differences across communities. In addition to measuring the overall effect of the policy, this project explores whether impacts vary by factors such as crash severity and local implementation strategies."
             ),
             p(
               "The findings from this research provide evidence on the effectiveness of daylighting policies as a transportation safety intervention and help identify where additional improvements may be needed. By combining data visualization, spatial analysis, and causal inference methods, this dashboard presents an accessible overview of the results and supports data-driven decision-making for transportation agencies, policymakers, and communities working to improve pedestrian and bicyclist safety."
@@ -1498,8 +1498,8 @@ methodology_page <- div(
       div(class = "document-card-title", "Regression Discontinuity in Time"),
       div(class = "document-card document-card--model",
           p(
-            "To estimate the causal effect of the implementation of AB 413 on crash frequency, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
-            tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. The local-linear specification estimated on either side of the cutoff is:",
+            "To estimate the causal effect of the implementation of AB 413 on crash frequency at a statewide level, we employ a sharp Regression Discontinuity in Time (RDiT) design using the ",
+            tags$code("rdrobust"), " package. RDiT is a causal inference method that compares an outcome, monthly crash count in this case, just before and after a specific date, and measures any jump or change at the cutoff. Since there are two dates of interest, January 01, 2024 (start of warning phase) and January 01, 2025 (start of citation phase), we conducted this analysis twice with each of the cutoff dates. We estimate a local linear specification as follows:",
             style = "color: var(--brand-ink); line-height: 1.7;"
           ),
           div(
@@ -1549,7 +1549,7 @@ methodology_page <- div(
                   tags$td(class = "var-role", "Control")
                 ),
                 tags$tr(
-                  tags$td(class = "var-name", "Season_t"),
+                  tags$td(class = "var-name", HTML("Season<sub>t</sub>")),
                   tags$td("Categorical control for season, capturing seasonal variation in crash frequency."),
                   tags$td(class = "var-role", "Control")
                 ),
@@ -1733,7 +1733,7 @@ results_page <- div(
         div(
           class = "document-card",
           p(
-            "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. Because these two estimates capture different comparisons (pre-policy vs. warning period, and warning period vs. enforcement), they shouldn't be read as repeated measures of the same effect; rather, the presence of a significant effect at both points suggests a safety benefit emerged as soon as the law took effect.",
+            "Our analysis provides encouraging evidence that AB 413 is reducing pedestrian crashes at intersections statewide. Using a consistent 12-month window around each policy date, we found statistically significant reductions in pedestrian crashes at both the January 2024 cutoff (when the law took effect) and the January 2025 cutoff (when enforcement began): roughly 79 and 62 fewer crashes on average, respectively. These two estimates represent different comparisons: the first looks at changes after the law took effect, while the second examines changes after enforcement began. They should not be added together or viewed as the same effect. Instead, the consistent reductions across both periods suggest that AB 413 began improving pedestrian safety soon after it was implemented.",
             style = "line-height:1.8;"
           )
         )
@@ -1915,9 +1915,9 @@ results_page <- div(
 
 # About Us Tab #
 # Helper for a picture placeholder + caption, reusable across all bio sections
-team_member_card <- function(name, description, img_src = NULL) {
+team_member_card <- function(name, description, university, img_src = NULL) {
   tags$div(
-    style = "display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 260px;",
+    style = "display: flex; flex-direction: column; align-items: center; text-align: center; max-width: 360px;",
     tags$div(
       style = "width: 200px; height: 200px; border-radius: 50%; background-color: var(--brand-highlight); border: 2px solid var(--brand-border); display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: 16px;",
       if (!is.null(img_src)) {
@@ -1937,8 +1937,12 @@ team_member_card <- function(name, description, img_src = NULL) {
       style = "font-family: monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brand-accent); margin-bottom: 8px;"
     ),
     tags$p(
-      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6;",
+      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6; margin: 0 0 4px 0;",
       description
+    ),
+    tags$p(
+      style = "font-size: 0.85rem; color: var(--brand-ink); line-height: 1.6; margin: 0;",
+      university
     )
   )
 }
@@ -1969,12 +1973,14 @@ about_page <- div(
     team_member_card(
       img_src = "kyle.JPG",
       name = "Kyle Klemba",
-      description = "Data Science & Economics, William & Mary"
+      description = "Data Science & Economics",
+      university = "William & Mary"
     ),
     team_member_card(
       img_src = "pride.JPG",
       name = "Pride Akana Techa",
-      description = "Computer Science & Mathematics, Berea College"
+      description = "Computer Science & Mathematics",
+      university = "Berea College"
     )
   ),
   
@@ -1987,8 +1993,9 @@ about_page <- div(
     style = "display: flex; justify-content: center; padding: 32px 28px;",
     team_member_card(
       img_src = "yuanyuan.JPG",
-      name = "Yuanyuan Wen",
-      description = "Department of Agricultural and Applied Economics, Virginia Tech"
+      name = "Yuanyuan Wen, PhD Candidate",
+      description = "Department of Agricultural and Applied Economics",
+      university = "Virginia Tech"
     )
   ),
   
@@ -2002,12 +2009,14 @@ about_page <- div(
     team_member_card(
       img_src = "drgao.png",
       name = "Yujuan Gao, PhD",
-      description =  "Department of Agricultural and Applied Economics, Virginia Tech"
+      description =  "Department of Agricultural and Applied Economics",
+      university = "Virginia Tech"
     ),
     team_member_card(
       img_src = "drcary.jpg",
       name = "Michael Cary, PhD",
-      description = "Department of Agricultural and Applied Economics, Virginia Tech"
+      description = "Department of Agricultural and Applied Economics",
+      university = "Virginia Tech"
     )
   ),
   # ======================================================
