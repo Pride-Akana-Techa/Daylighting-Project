@@ -18,7 +18,7 @@ tigris_cache_dir <- here::here("data-clean", ".tigris_cache")
 dir.create(tigris_cache_dir, showWarnings = FALSE, recursive = TRUE)
 options(tigris_cache_dir = tigris_cache_dir)
 
-out_dir <- here("initial-analysis", "outputs")
+out_dir <- here("initial-analysis", "figs", "hotspot-outputs")
 if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
 
 target_crs <- 3310
@@ -26,7 +26,7 @@ target_crs <- 3310
 #### city implementation dates ####
 city_impl <- tibble::tibble(
   CITY         = c("San Diego", "San Francisco", "Los Angeles"),
-  cutoff_date  = as.Date(c("2025-03-01", "2025-01-01", "2025-11-01")),
+  cutoff_date  = as.Date(c("2025-03-01", "2025-01-01", "2025-01-01")),
   scenario     = "Enforcement_Date"
 )
 

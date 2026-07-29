@@ -2118,10 +2118,19 @@ ui <- page_fluid(
 # ==========================================================================
 # Server ------------------------------------------------------------------
 # ==========================================================================
+responsive_height <- function(session, output_id, base_height, mobile_height, breakpoint = 500) {
+  function() {
+    w <- session$clientData[[paste0("output_", output_id, "_width")]]
+    if (is.null(w) || w >= breakpoint) base_height else mobile_height
+  }
+}
 
 server <- function(input, output, session) {
-  # Sidebar
-  nav_map <- list(
+  
+  MAX_HEATMAP_POINTS <- 30000
+  MAX_CLUSTER_POINTS <- 10000  
+
+    nav_map <- list(
     "nav_overview" = "overview",
     "nav_literature" = "literature",
     "nav_maps" = "maps",
@@ -2141,7 +2150,7 @@ server <- function(input, output, session) {
       nav_select("main_nav", selected = nav_map[[link_id]], session = session)
     })
   })
-  
+
   apply_filters <- function(data) {
     mode_val <- if (is.null(input$mode)) "" else input$mode[1]
     
@@ -2172,7 +2181,7 @@ server <- function(input, output, session) {
     return(data)
   }
   
-  date_range_debounced <- reactive({ input$date_range }) %>% debounce(400)
+  date_range_debounced <- reactive({ input$date_range }) %>% debounce(600)
   
   filtered_data_graph <- reactive({ apply_filters(bike_or_ped_acc_all) }) %>%
     bindCache(input$mode, input$location_type,
@@ -2182,21 +2191,44 @@ server <- function(input, output, session) {
     bindCache(input$mode, input$location_type,
               input$collision_severity, input$county, date_range_debounced())
   
-  filtered_data_map_debounced <- filtered_data_map %>% debounce(200)
+  filtered_data_map_debounced <- filtered_data_map %>% debounce(1000)
   
   output$cluster_warning <- renderUI({
     data_map <- filtered_data_map()
-    if (nrow(data_map) > MAX_CLUSTER_POINTS) {
+    if (nrow(data_map) > MAX_HEATMAP_POINTS) {
+      
       div(
         class = "inline-warning-content",
-        "Clustered points only display below ",
-        scales::comma(MAX_CLUSTER_POINTS),
-        " records. Current selection is ",
+        
+        "Displaying an estimated heatmap using ",
+        
+        scales::comma(MAX_HEATMAP_POINTS),
+        
+        " sampled crashes from ",
+        
         scales::comma(nrow(data_map)),
-        " points. Displaying heatmap only."
+        
+        " total crashes for improved performance.", "Clustered points are disabled above ",
+        
+        scales::comma(MAX_CLUSTER_POINTS),
+        
+        " crashes."
+        
       )
-    } else {
-      NULL
+      
+    } else if (nrow(data_map) > MAX_CLUSTER_POINTS) {
+      
+      div(
+        class = "inline-warning-content",
+        
+        "Clustered points are disabled above ",
+        
+        scales::comma(MAX_CLUSTER_POINTS),
+        
+        " crashes."
+        
+      )
+      
     }
   })
   
@@ -2424,8 +2456,17 @@ server <- function(input, output, session) {
   })
   
   observe({
+    
     coords <- filtered_data_map_debounced()
     n_total <- nrow(coords)
+    
+
+    coords_heat <-
+      if (n_total > MAX_HEATMAP_POINTS) {
+        dplyr::slice_sample(coords, n = MAX_HEATMAP_POINTS)
+      } else {
+        coords
+      }
     
     proxy <- leafletProxy("map") %>%
       clearHeatmap() %>%
@@ -2435,7 +2476,7 @@ server <- function(input, output, session) {
     if (n_total > 0) {
       proxy <- proxy %>%
         addHeatmap(
-          data = coords, lng = ~lng, lat = ~lat,
+          data = coords_heat, lng = ~lng, lat = ~lat,
           blur = 22, max = 0.02, radius = 14,
           gradient = c("0.2" = "#440154", "0.4" = "#3b528b",
                        "0.6" = "#21918c", "0.8" = "#5ec962", "1.0" = "#fde725"),
@@ -2481,39 +2522,31 @@ server <- function(input, output, session) {
   # --- Results page: statewide RDiT plot and estimates table ---------------
   output$statewide_rd_plot <- renderPlot({
     statewide_rdit_plot
-  }, height = function() {
-    w <- session$clientData$output_statewide_rd_plot_width
-    if (is.null(w)) 360 else if (w < 500) 620 else 360
-  })
+  }, height = responsive_height(session, "statewide_rd_plot", 360, 640))
   
-  # city-level plot
   output$city_rd_plot <- renderPlot({
     city_rd_plot
-  }, height = function() {
-    w <- session$clientData$output_statewide_rd_plot_width
-    if (is.null(w)) 360 else if (w < 500) 620 else 360
-  })
+  }, height = responsive_height(session, "city_rd_plot", 480, 560))
   
   output$city_rdit_san_diego <- renderPlot({
     city_rdit_plots[["San Diego"]]
-  }, height = function() {
-    w <- session$clientData$output_statewide_rd_plot_width
-    if (is.null(w)) 360 else if (w < 500) 620 else 360
-  })
+  }, height = responsive_height(session, "city_rdit_san_diego", 380, 700))
   
   output$city_rdit_san_francisco <- renderPlot({
     city_rdit_plots[["San Francisco"]]
-  }, height = function() {
-    w <- session$clientData$output_statewide_rd_plot_width
-    if (is.null(w)) 360 else if (w < 500) 620 else 360
-  })
+  }, height = responsive_height(session, "city_rdit_san_francisco", 380, 700))
   
   output$city_rdit_la <- renderPlot({
     city_rdit_plots[["Los Angeles"]]
-  }, height = function() {
-    w <- session$clientData$output_statewide_rd_plot_width
-    if (is.null(w)) 360 else if (w < 500) 620 else 360
-  })
+  }, height = responsive_height(session, "city_rdit_la", 380, 700))
+  
+  output$bandwidth_sensitivity_plot <- renderPlot({
+    bandwidth_sensitivity_plot
+  }, height = responsive_height(session, "bandwidth_sensitivity_plot", 380, 650))
+  
+  output$placebo_plot <- renderPlot({
+    placebo_plot
+  }, height = responsive_height(session, "placebo_plot", 350, 420))
   
   output$statewide_results_table <- renderUI({
     results_df <- tibble::tibble(
