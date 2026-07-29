@@ -21,7 +21,7 @@ library(lubridate)
 # -------------------------------------------------------------------------
 # Data Combining 
 
-#combines county data into statewide dataset and saves as Crashes_California
+# Combines county data into statewide dataset and saves as Crashes_California
 
 combined_data <- list.files(path = "initial-analysis/data-raw/TIMS_Crash_Data_Counties",
                             pattern = "\\.csv$", full.names = TRUE) |>
