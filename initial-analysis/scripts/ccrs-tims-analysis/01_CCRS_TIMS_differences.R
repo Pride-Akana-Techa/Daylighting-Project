@@ -14,7 +14,7 @@ library(sf)
 # Read and Organize -------------------------------------------------------
 
 # Read Datasets
-tims_crashes <- readRDS("initial-analysis/scripts/TIMS_Filtered.rds")
+tims_crashes <- readRDS("initial-analysis/scripts/01_TIMS_Cleaned.rds")
 ccrs_crashes <- read_csv("initial-analysis/scripts/updated-crashes.csv")
 
 # remove duplicate rows (YW: still have duplicates?)

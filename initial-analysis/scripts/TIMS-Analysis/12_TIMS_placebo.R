@@ -10,7 +10,7 @@
 library(tidyverse)
 library(rdrobust)
 
-tims_data <- readRDS("initial-analysis/data-clean/updated_tims.rds")
+tims_data <- readRDS("initial-analysis/data-clean/01_TIMS_Cleaned.rds")
 
 
 # Test 1 ------------------------------------------------------------------

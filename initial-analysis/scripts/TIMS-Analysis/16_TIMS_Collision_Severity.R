@@ -14,7 +14,7 @@ library(tidyverse)
 library(rdrobust)
 library(scales)
 
-tims_data <-  readRDS("initial-analysis/data-clean/updated_tims.rds")
+tims_data <-  readRDS("initial-analysis/data-clean/02_TIMS_Cleaned.rds")
 
 
 # Monthly Proportion

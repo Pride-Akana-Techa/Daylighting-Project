@@ -16,7 +16,7 @@ library(tidyverse)
 library(rdrobust)
 library(patchwork)
 
-tims_crashes <- readRDS("initial-analysis/data-clean/updated_tims.rds")
+tims_crashes <- readRDS("initial-analysis/data-clean/02_TIMS_Cleaned.rds")
 crashes <- read_csv("initial-analysis/data/Crashes_California.csv")
 
 # Filter required crashes

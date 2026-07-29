@@ -89,3 +89,4 @@ cal_nad83 <- st_as_sf(cal_geo, coords = c("POINT_X", "POINT_Y"),
 cal_albers <- st_transform(cal_nad83, 3310)
 
 saveRDS(cal_albers, "initial-analysis/data-clean/02_TIMS_Geocoded.rds")
+
