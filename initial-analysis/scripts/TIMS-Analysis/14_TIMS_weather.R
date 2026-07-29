@@ -9,11 +9,11 @@
 library(tidyverse)
 library(rdrobust)
 
-tims_data <-  readRDS("initial-analysis/data-clean/updated_tims.rds")
+tims_data <-  readRDS("initial-analysis/data-clean/02_TIMS_Cleaned.rds")
 
 # Check yearly weather condition
 weather_distribution <- tims_data |> 
-  filter(ACCIDENT_YEAR >= "2022" &
+  filter(ACCIDENT_YEAR >= 2022 &
            PED_ACTION == "B" &
            INTERSECTION == "Y") |> 
   filter_out(is.na(WEATHER_1)) |> 

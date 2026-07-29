@@ -17,7 +17,13 @@ library(nprobust)
 library(patchwork)
 
 # Read datasets
-tims_crashes <-  readRDS("initial-analysis/data/TIMS_Filtered.rds")
+tims_crashes <-  readRDS("initial-analysis/data-clean/01_TIMS_Cleaned.rds")
+
+# Compressing dataset for R Shiny 
+tims <- readRDS("initial-analysis/data-clean/01_TIMS_Cleaned.rds")
+tims_rdit <- tims |> 
+  select(ACCIDENT_YEAR, PED_ACTION, INTERSECTION, COLLISION_DATE, CITY) |> 
+  saveRDS("ShinyApp/shiny-data/tims_filtered2.rds")
 
 
 # Controlling for Seasonal Differences ------------------------------------

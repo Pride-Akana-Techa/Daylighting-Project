@@ -2191,7 +2191,7 @@ server <- function(input, output, session) {
     bindCache(input$mode, input$location_type,
               input$collision_severity, input$county, date_range_debounced())
   
-  filtered_data_map_debounced <- filtered_data_map %>% debounce(1000)
+  filtered_data_map_debounced <- filtered_data_map %>% debounce(1000) |> throttle(3000)
   
   output$cluster_warning <- renderUI({
     data_map <- filtered_data_map()

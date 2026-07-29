@@ -1,7 +1,6 @@
 
 # -------------------------------------------------------------------------
 ## Investigating the relationship between lighting condition and pedestrian      crashes at intersections at the cutoff dates
-## Inputs: initial-analysis/data-clean/updated_tims.rds
 
 # -------------------------------------------------------------------------
 
@@ -11,11 +10,36 @@ library(rdrobust)
 library(scales)
 library(patchwork)
 
-tims_data <-  readRDS("initial-analysis/data-clean/updated_tims.rds")
+# Preparing dataset
+
+tims_crashes <- readRDS("initial-analysis/data-clean/01_TIMS_Cleaned.rds")
+
+
+tims_lighting = c(
+  "A" = "Daylight", "B" = "Dusk/Dawn", "C" = "Dark",
+  "D" = "Dark", "E" = "Dark"
+)
+
+tims_weather = c(
+  "A" = "Clear", "B" = "Cloudy", "C" = "Raining",
+  "D" = "Other", "E" = "Other", "F" = "Other", "G" = "Other"
+)
+
+tims_updated <- tims_crashes |> 
+  mutate(
+    LIGHTING  = tims_lighting[as.character(LIGHTING)],
+    WEATHER_1 = tims_weather[as.character(WEATHER_1)],
+    MONTH = month(ymd(COLLISION_DATE), label = TRUE)
+    )
+
+saveRDS(tims_updated, "initial-analysis/data-clean/02_TIMS_Cleaned.rds")
+
+
+tims_data <-  readRDS("initial-analysis/data-clean/02_TIMS_Cleaned.rds")
 
 # Check yearly lighting condition
 lighting_distribution <- tims_data |> 
-  filter(ACCIDENT_YEAR >= "2022" &
+  filter(ACCIDENT_YEAR >= 2022 &
            PED_ACTION == "B" &
            INTERSECTION == "Y") |> 
   filter_out(is.na(LIGHTING)) |> 
@@ -26,7 +50,7 @@ lighting_distribution <- tims_data |>
 
 # Monthly Proportion
 lighting_monthly <- tims_data |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024", "2025"),
+  filter(ACCIDENT_YEAR %in% c(2023, 2024, 2025),
          PED_ACTION == "B",
          INTERSECTION == "Y") |> 
   filter(!is.na(LIGHTING)) |>
@@ -41,7 +65,7 @@ lighting_monthly <- tims_data |>
 ## Jan 2024 Cutoff ##
 # Prepare data
 daylight_data <- lighting_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(LIGHTING == "Daylight") |> 
   mutate(Time = interval(as.Date("2024-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -99,7 +123,7 @@ ggsave(filename = "initial-analysis/figs/daylight_rdit.png",
 ## Jan 2025 ##
 # Prepare data
 daylight_data2 <- lighting_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(LIGHTING == "Daylight") |> 
   mutate(Time = interval(as.Date("2025-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -244,7 +268,7 @@ ggsave(filename = "initial-analysis/figs/daylight_models.png",
 ## Jan 2024 Cutoff ##
 # Prepare data
 dark_data <- lighting_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2023", "2024")) |> 
+  filter(ACCIDENT_YEAR %in% c(2023, 2024)) |> 
   filter(LIGHTING == "Dark") |> 
   mutate(Time = interval(as.Date("2024-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
@@ -302,7 +326,7 @@ ggsave(filename = "initial-analysis/figs/dark_rdit.png",
 ## Jan 2025 Cutoff ##
 # Prepare data
 dark_data2 <- lighting_monthly |> 
-  filter(ACCIDENT_YEAR %in% c("2024", "2025")) |> 
+  filter(ACCIDENT_YEAR %in% c(2024, 2025)) |> 
   filter(LIGHTING == "Dark") |> 
   mutate(Time = interval(as.Date("2025-01-01"), MONTH_DATE) %/% months(1),
          Post = ifelse(Time >= 0, 1, 0),
